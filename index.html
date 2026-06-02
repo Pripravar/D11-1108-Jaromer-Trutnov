@@ -1332,11 +1332,24 @@ var DOCS_PP = [
 ];
 var DOCS_VPR = [
   {kmOd:129.300, kmDo:133.000, soubor:PDF_BASE+'SO_101/D_1_01_101_04_01_Vzorove_rezy.pdf', nazev:'Vzorové příčné řezy SO 101'},
+  {kmOd:129.300, kmDo:133.000, soubor:PDF_BASE+'SO_101/D_1_01_101_04_03_Detaily.pdf', nazev:'Detaily SO 101'},
 ];
 var DOCS_DZ      = [ /* DOPLNIT: dopravní značení */ ];
-var DOCS_CHPR    = [ /* DOPLNIT: charakteristické příčné řezy */ ];
+var DOCS_CHPR    = [
+  {kmOd:128.880, kmDo:129.400, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-27.dil km 128880-129400.pdf', nazev:'Příčné řezy SO 101 díl 27 (km 128,880–129,400)'},
+  {kmOd:129.420, kmDo:129.920, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-28.dil km 129420-129920.pdf', nazev:'Příčné řezy SO 101 díl 28 (km 129,420–129,920)'},
+  {kmOd:129.940, kmDo:130.600, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-29.dil km 129940-130600.pdf', nazev:'Příčné řezy SO 101 díl 29 (km 129,940–130,600)'},
+  {kmOd:130.620, kmDo:131.140, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-30.dil km 130620-131140.pdf', nazev:'Příčné řezy SO 101 díl 30 (km 130,620–131,140)'},
+  {kmOd:131.160, kmDo:131.680, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-31.dil km 131160-131680.pdf', nazev:'Příčné řezy SO 101 díl 31 (km 131,160–131,680)'},
+  {kmOd:131.700, kmDo:132.200, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-32.dil km 131700-132200.pdf', nazev:'Příčné řezy SO 101 díl 32 (km 131,700–132,200)'},
+  {kmOd:132.220, kmDo:132.660, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-33.dil km 132220-132660.pdf', nazev:'Příčné řezy SO 101 díl 33 (km 132,220–132,660)'},
+  {kmOd:132.240, kmDo:133.000, soubor:PDF_BASE+'SO_101/D_1_01_101_05_Pricne rezy-34.dil km 132240-133000.pdf', nazev:'Příčné řezy SO 101 díl 34 (km 132,240–133,000)'},
+];
 var DOCS_KLAD    = [ /* DOPLNIT: kladečské plány */ ];
-var DOCS_TZ      = [ /* DOPLNIT: technické zprávy */ ];
+var DOCS_TZ      = [
+  {kmOd:129.300, kmDo:133.000, soubor:PDF_BASE+'SO_101/D_1_01_101_01_TZ.pdf', nazev:'Technická zpráva SO 101'},
+  {kmOd:129.300, kmDo:133.000, soubor:PDF_BASE+'SO_101/D_1_01_101_07_Kontrolni body.pdf', nazev:'Kontrolní body SO 101'},
+];
 
 // PROPUSTKY / MOSTY - GPS marker na mapě, klik otevře PDF panel se VŠEMI výkresy daného SO.
 // Formát: {id:'P1', km:2.405, nazev:'Propustek P1 — km 2,405 (SO 104)', vykresy:[{typ,nazev,soubor},…]}
@@ -1347,14 +1360,74 @@ var PROPUSTEK_TZ = '';
 // kmShift = posun po ose (km), perpOffset = posun kolmo k ose (px) → rozprostře markery.
 // Formát: {id:'SO 441', kat:'400', badge:'VO1', km:2.756, kmShift:0, perpOffset:55, nazev:'…', vykresy:[…]}
 var DOPLNKY_SO = [
-  {id:'SO 160', kat:'100', badge:'160', km:129.600, kmShift:0, perpOffset:-70, nazev:'SO 160 Přístupy na pozemky v k.ú Horní Ždár', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 160', soubor:PDF_BASE+'SO_160/160_02_SIT.pdf'}]}, /* km PŘIBLIŽNÉ – ověřit */
-  {id:'SO 167', kat:'100', badge:'167', km:130.300, kmShift:0, perpOffset:-35, nazev:'SO 167 Přeložka polní cesty v km 130,30 - 130,50 vlevo', vykresy:[]},
-  {id:'SO 135', kat:'100', badge:'135', km:131.000, kmShift:0, perpOffset:0, nazev:'SO 135 Odp. Brusnice v km 131,0', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 135', soubor:PDF_BASE+'SO_135/135_02_Situace.pdf'}]},
-  {id:'SO 149', kat:'100', badge:'149', km:131.200, kmShift:0, perpOffset:35, nazev:'SO 149 Příjezd k retenční nádrži km 131,2', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 149', soubor:PDF_BASE+'SO_149/149_02_SIT.pdf'}]},
-  {id:'SO 161', kat:'100', badge:'161', km:131.200, kmShift:0, perpOffset:70, nazev:'SO 161 Přístupy na pozemky v k.ú Brusnice', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 161', soubor:PDF_BASE+'SO_161/161_02_SIT.pdf'}]}, /* km PŘIBLIŽNÉ – ověřit */
-  {id:'SO 125', kat:'100', badge:'125', km:132.150, kmShift:0, perpOffset:-70, nazev:'SO 125 Přeložka  III_30016 (km 132,15)', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 125', soubor:PDF_BASE+'SO_125/125_02_SIT.pdf'}]},
-  {id:'SO 124', kat:'100', badge:'124', km:132.220, kmShift:0, perpOffset:-35, nazev:'SO 124 Přeložka silnice III_30015 (km 132,22)', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 124', soubor:PDF_BASE+'SO_124/124_02_SIT.pdf'}]},
-  {id:'SO 124.1', kat:'100', badge:'124.1', km:132.220, kmShift:0, perpOffset:0, nazev:'SO 124.1 Přeložka silnice III_30015 (km 132,22) - Přidatné pruhy na sil I', vykresy:[{typ:'📐 Situace', nazev:'Situace SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_02_SIT.pdf'}]},
+  {id:'SO 160', kat:'100', badge:'160', km:129.600, kmShift:0, perpOffset:-70, nazev:'SO 160 Přístupy na pozemky v k.ú Horní Ždár', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 160', soubor:PDF_BASE+'SO_160/160_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 160', soubor:PDF_BASE+'SO_160/160_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 160', soubor:PDF_BASE+'SO_160/160_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 160', soubor:PDF_BASE+'SO_160/160_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 160', soubor:PDF_BASE+'SO_160/160_05_PR.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 160', soubor:PDF_BASE+'SO_160/160_06_KB.pdf'},
+  ]}, /* km PŘIBLIŽNÉ – ověřit */
+  {id:'SO 167', kat:'100', badge:'167', km:130.300, kmShift:0, perpOffset:-35, nazev:'SO 167 Přeložka polní cesty v km 130,30 - 130,50 vlevo', vykresy:[
+    {typ:'📄 Seznam příloh', nazev:'Seznam příloh SO 167 (jiné výkresy v PDPS nejsou)', soubor:PDF_BASE+'SO_167/167_00_SP.pdf'},
+  ]},
+  {id:'SO 135', kat:'100', badge:'135', km:131.000, kmShift:0, perpOffset:0, nazev:'SO 135 Odp. Brusnice v km 131,0', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 135', soubor:PDF_BASE+'SO_135/135_01_Technicka zprava.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 135', soubor:PDF_BASE+'SO_135/135_02_Situace.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 135', soubor:PDF_BASE+'SO_135/135_03_Podelny profil.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 135', soubor:PDF_BASE+'SO_135/135_04_Vzorovy pricny rez.pdf'},
+    {typ:'✂️ Příčné řezy 1', nazev:'Příčné řezy SO 135 díl 1 (km 130,800–131,020)', soubor:PDF_BASE+'SO_135/135_05_Pricne rezy-01.dil km 130800-131020.pdf'},
+    {typ:'✂️ Příčné řezy 2', nazev:'Příčné řezy SO 135 díl 2 (km 131,040–131,260)', soubor:PDF_BASE+'SO_135/135_05_Pricne rezy-02.dil km 131040-131260.pdf'},
+    {typ:'🧱 Gabiony', nazev:'Gabionové zdi vpravo', soubor:PDF_BASE+'SO_135/135_06_Gabionove zdi-1-Vpravo.pdf'},
+    {typ:'🧱 Gabiony', nazev:'Gabionové zdi vlevo', soubor:PDF_BASE+'SO_135/135_06_Gabionove zdi-2-Vlevo.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 135', soubor:PDF_BASE+'SO_135/135_10_Kontrolni body.pdf'},
+  ]},
+  {id:'SO 149', kat:'100', badge:'149', km:131.200, kmShift:0, perpOffset:35, nazev:'SO 149 Příjezd k retenční nádrži km 131,2', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 149', soubor:PDF_BASE+'SO_149/149_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 149', soubor:PDF_BASE+'SO_149/149_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 149', soubor:PDF_BASE+'SO_149/149_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 149', soubor:PDF_BASE+'SO_149/149_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 149', soubor:PDF_BASE+'SO_149/149_05_PR.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 149', soubor:PDF_BASE+'SO_149/149_06_KB.pdf'},
+  ]},
+  {id:'SO 161', kat:'100', badge:'161', km:131.200, kmShift:0, perpOffset:70, nazev:'SO 161 Přístupy na pozemky v k.ú Brusnice', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 161', soubor:PDF_BASE+'SO_161/161_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 161', soubor:PDF_BASE+'SO_161/161_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 161', soubor:PDF_BASE+'SO_161/161_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 161', soubor:PDF_BASE+'SO_161/161_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 161', soubor:PDF_BASE+'SO_161/161_05_PR.pdf'},
+    {typ:'🔵 Propustek 1', nazev:'Propustek SO 161 (06.1)', soubor:PDF_BASE+'SO_161/161_06.1_PROP.pdf'},
+    {typ:'🔵 Propustek 2', nazev:'Propustek SO 161 (06.2)', soubor:PDF_BASE+'SO_161/161_06.2_PROP.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 161', soubor:PDF_BASE+'SO_161/161_07_KB.pdf'},
+  ]}, /* km PŘIBLIŽNÉ – ověřit */
+  {id:'SO 125', kat:'100', badge:'125', km:132.150, kmShift:0, perpOffset:-70, nazev:'SO 125 Přeložka  III_30016 (km 132,15)', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 125', soubor:PDF_BASE+'SO_125/125_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 125', soubor:PDF_BASE+'SO_125/125_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 125', soubor:PDF_BASE+'SO_125/125_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 125', soubor:PDF_BASE+'SO_125/125_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 125', soubor:PDF_BASE+'SO_125/125_05_PR.pdf'},
+    {typ:'🔵 Propustek 1', nazev:'Propustek SO 125 (1)', soubor:PDF_BASE+'SO_125/125_06_PROP_1.pdf'},
+    {typ:'🔵 Propustek 2', nazev:'Propustek SO 125 (2)', soubor:PDF_BASE+'SO_125/125_06_PROP_2.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 125', soubor:PDF_BASE+'SO_125/125_07_KB.pdf'},
+  ]},
+  {id:'SO 124', kat:'100', badge:'124', km:132.220, kmShift:0, perpOffset:-35, nazev:'SO 124 Přeložka silnice III_30015 (km 132,22)', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 124', soubor:PDF_BASE+'SO_124/124_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 124', soubor:PDF_BASE+'SO_124/124_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 124', soubor:PDF_BASE+'SO_124/124_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 124', soubor:PDF_BASE+'SO_124/124_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 124', soubor:PDF_BASE+'SO_124/124_05_PR.pdf'},
+    {typ:'🔵 Propustek', nazev:'Propustek SO 124', soubor:PDF_BASE+'SO_124/124_06_PROP.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 124', soubor:PDF_BASE+'SO_124/124_07_KB.pdf'},
+  ]},
+  {id:'SO 124.1', kat:'100', badge:'124.1', km:132.220, kmShift:0, perpOffset:0, nazev:'SO 124.1 Přeložka silnice III_30015 (km 132,22) - Přidatné pruhy na sil I', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_01_TZ.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_02_SIT.pdf'},
+    {typ:'📈 Podélný profil', nazev:'Podélný profil SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_03_PP.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_04_VPR.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_05_PR.pdf'},
+    {typ:'🔵 Propustek', nazev:'Propustek SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_06_PROP.pdf'},
+    {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_07_KB.pdf'},
+  ]},
 ];
 
 // NN NADZEMNÍ VEDENÍ - křížení s osou (značka ⚡). Formát: {km: 0.077}
