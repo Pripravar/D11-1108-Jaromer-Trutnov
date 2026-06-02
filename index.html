@@ -1539,7 +1539,7 @@ function showToast(msg,dur) {
 // ── MAPA ──────────────────────────────
 function initMap() {
   map=L.map('map',{
-    center:[49.917,14.580],
+    center:[50.510,15.909],
     zoom:14,
     maxZoom:20,
     zoomControl:true,
@@ -2168,7 +2168,11 @@ function centerGPS() {
 
 function resetMapView() {
   if(!map) return;
-  map.setView([49.917, 14.580], 14);
+  if(GPX_POINTS && GPX_POINTS.length) {
+    map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
+  } else {
+    map.setView([50.510, 15.909], 14);
+  }
 }
 function toggleLayers(){document.getElementById('layers-panel').classList.toggle('open');}
 function closeLayersPanel(){document.getElementById('layers-panel').classList.remove('open');}
@@ -6120,6 +6124,9 @@ function setSOForDay(id, kind, val){
 // Vrátí všechna SO známá v projektu (z KZP seedu, profilů osob/strojů a historii v deníku).
 function getAllProjectSOs(){
   var set = new Set();
+  // Ze stavebních objektů projektu (páteř SO 101 + bodové objekty)
+  try { if(typeof STAVEBNI_OBJEKTY !== 'undefined') STAVEBNI_OBJEKTY.forEach(function(s){ if(s && s.id) set.add(s.id); }); } catch(e){}
+  try { if(typeof DOPLNKY_SO !== 'undefined') DOPLNKY_SO.forEach(function(s){ if(s && s.id) set.add(s.id); }); } catch(e){}
   // Z KZP
   if(window.kzpSeed) window.kzpSeed.forEach(function(k){ if(k.so) set.add(k.so); });
   if(window.allKzp) Object.keys(window.allKzp).forEach(function(id){ var k = window.allKzp[id]; if(k && k.so) set.add(k.so); });
