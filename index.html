@@ -1216,7 +1216,7 @@ document.addEventListener('touchend', function(e){
 
 <script>
 var MAPY_API_KEY = '3vpBbv-BCLasUnAK6Hz3mUzzCEpX0M05kCR82RN70n0';        /* developer.mapy.cz */
-var FIREBASE_URL = 'https://PROJEKT-default-rtdb.europe-west1.firebasedatabase.app'; /* DOPLNIT */
+var FIREBASE_URL = 'https://d11-1108-jaromer---trutnov-default-rtdb.europe-west1.firebasedatabase.app';
 
 // ════════════════════════════════════════════════════════════════════
 // Firebase konfigurace pro Auth + Messaging (PUSH notifikace).
@@ -1227,19 +1227,19 @@ var FIREBASE_URL = 'https://PROJEKT-default-rtdb.europe-west1.firebasedatabase.a
 // Pokud apiKey zůstane na 'PLACEHOLDER', přihlášení se zobrazí jako
 // nedostupné s instrukcí, co udělat. Realtime Database funguje i bez tohoto.
 // ════════════════════════════════════════════════════════════════════
-var FIREBASE_CONFIG = {                  /* DOPLNIT z Firebase Console → Project Settings → Web app */
-  apiKey:            'DOPLNIT',          /* (shodně i ve firebase-messaging-sw.js!) */
-  authDomain:        'PROJEKT.firebaseapp.com',
+var FIREBASE_CONFIG = {
+  apiKey:            'AIzaSyAJ05DOXqbCx7W5BcKdMfzu0o76Jp9514o',  /* (shodně i ve firebase-messaging-sw.js!) */
+  authDomain:        'd11-1108-jaromer---trutnov.firebaseapp.com',
   databaseURL:       FIREBASE_URL,
-  projectId:         'PROJEKT',
-  storageBucket:     'PROJEKT.firebasestorage.app',
-  messagingSenderId: 'DOPLNIT',
-  appId:             'DOPLNIT',
-  measurementId:     'DOPLNIT'
+  projectId:         'd11-1108-jaromer---trutnov',
+  storageBucket:     'd11-1108-jaromer---trutnov.firebasestorage.app',
+  messagingSenderId: '843987471450',
+  appId:             '1:843987471450:web:5d551ef350fc93ee459c63',
+  measurementId:     'G-7PLP6ZSD3Q'
 };
 // VAPID klíč pro Web Push (Firebase Console → Project Settings → Cloud Messaging → Web Push certificates)
 // !! BEZ tohoto klíče push notifikace NEPŮJDOU. Klient i tak může fungovat, jen nepřijde upozornění.
-var FIREBASE_VAPID_KEY = 'DOPLNIT'; /* Firebase Console → Cloud Messaging → Web Push certificates */
+var FIREBASE_VAPID_KEY = 'BIjBMdGC4qYAqdhKIsS-rID5X41eUlGrlWgqZxJpbmQWSOpDj-NzmahGNLXJ9QeQ2dKZ5Ei2O2pyQV9NwEJO5jE';
 
 // Firebase inicializace
 firebase.initializeApp(FIREBASE_CONFIG);
@@ -1264,7 +1264,7 @@ var KM_END   = 133.000;   /* KÚ úseku sdružení (km 133,000) */
 var GITHUB_USER_REPO = 'Pripravar/D11-1108-Jaromer-Trutnov';
 var GITHUB_BRANCH_PDF = 'main';
 // Upload fotek jde přes Cloud Function (GitHub token zůstává na serveru, ne v prohlížeči).
-var UPLOAD_FN_URL = 'https://europe-west1-PROJEKT.cloudfunctions.net/uploadFoto'; /* DOPLNIT po deployi */
+var UPLOAD_FN_URL = 'https://europe-west1-d11-1108-jaromer---trutnov.cloudfunctions.net/uploadFoto';
 // Bázová cesta k PDF výkresům - RELATIVNÍ k aplikaci (na GitHub Pages).
 // Důvod: raw.githubusercontent.com servíruje PDF jako application/octet-stream
 // → iframe je nezobrazí. Pages servírují PDF jako application/pdf → iframe OK.
@@ -3843,7 +3843,7 @@ function buildSO() {
 
     var line = L.polyline(pts, {color:so.barva, weight:7, opacity:0.55});
     line.bindPopup(
-      '<b>' + so.id + '</b> // Oprava silnice I/3' +
+      '<b>' + so.id + '</b>' + (so.short ? ' // ' + so.short : '') +
       '<br>km <b>' + fmtKm(so.kmOd) + ' – ' + fmtKm(so.kmDo) + '</b>',
       {className:'so-tooltip', maxWidth:240}
     );
@@ -3852,8 +3852,11 @@ function buildSO() {
     var step = 20;
     for(var pi = 1; pi < pts.length - 1; pi += step) {
       var bear2 = bearList[pi];
-      var rot = bear2;
-      if(rot > 90 && rot < 270) rot = (rot + 180) % 360;
+      // Úhel textu = azimut osy − 90 (převod kompasového azimutu na CSS rotaci).
+      // Pak srovnání do čitelné polohy (žádný text vzhůru nohama).
+      var rot = bear2 - 90;
+      if(rot > 90) rot -= 180;
+      else if(rot < -90) rot += 180;
       var perpRad2 = (bear2 - 90) * Math.PI / 180;
       var offExtra = 20 / 6371000;
       var latL = pts[pi][0] + offExtra*(180/Math.PI)*Math.cos(perpRad2);
@@ -3862,7 +3865,7 @@ function buildSO() {
         className:'',
         html:'<div style="color:'+so.barva+';font-size:14px;font-weight:800;white-space:nowrap;'+
              'text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;'+
-             'transform:rotate('+(rot+90).toFixed(0)+'deg);transform-origin:0 50%;">'+
+             'transform:rotate('+rot.toFixed(0)+'deg);transform-origin:0 50%;">'+
              so.id+'</div>',
         iconSize:[0,0], iconAnchor:[0,0],
       });
@@ -3915,8 +3918,9 @@ function buildEtapy() {
         var step = 14;
         for(var pi = 1; pi < pts.length - 1; pi += step) {
           var bear2 = bearList[pi];
-          var rot = bear2;
-          if(rot > 90 && rot < 270) rot = (rot + 180) % 360;
+          var rot = bear2 - 90;
+          if(rot > 90) rot -= 180;
+          else if(rot < -90) rot += 180;
           var perpDeg2 = strana === 'vpravo' ? (bear2+90) : (bear2-90);
           var perpRad2 = perpDeg2 * Math.PI / 180;
           var offExtra = 20 / 6371000;
@@ -3926,7 +3930,7 @@ function buildEtapy() {
             className:'',
             html:'<div style="color:'+etapa.barva+';font-size:14px;font-weight:800;white-space:nowrap;'+
                  'text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000;'+
-                 'transform:rotate('+(rot+90).toFixed(0)+'deg);transform-origin:0 50%;">'+
+                 'transform:rotate('+rot.toFixed(0)+'deg);transform-origin:0 50%;">'+
                  'E'+etapa.id+' // '+(u.terminUsek||etapa.termin)+'</div>',
             iconSize:[0,0], iconAnchor:[0,0],
           });

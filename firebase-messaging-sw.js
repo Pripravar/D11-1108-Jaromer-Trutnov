@@ -4,12 +4,12 @@ importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey:            'DOPLNIT',
-  authDomain:        'PROJEKT.firebaseapp.com',
-  projectId:         'PROJEKT',
-  storageBucket:     'PROJEKT.firebasestorage.app',
-  messagingSenderId: 'DOPLNIT',
-  appId:             'DOPLNIT'
+  apiKey:            'AIzaSyAJ05DOXqbCx7W5BcKdMfzu0o76Jp9514o',
+  authDomain:        'd11-1108-jaromer---trutnov.firebaseapp.com',
+  projectId:         'd11-1108-jaromer---trutnov',
+  storageBucket:     'd11-1108-jaromer---trutnov.firebasestorage.app',
+  messagingSenderId: '843987471450',
+  appId:             '1:843987471450:web:5d551ef350fc93ee459c63'
 });
 
 var messaging = firebase.messaging();
