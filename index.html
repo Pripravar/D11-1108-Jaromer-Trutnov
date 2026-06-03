@@ -2428,7 +2428,9 @@ function renderNotesEvidence(){
       + '<td style="padding:6px 6px;color:var(--accent2);white-space:nowrap;font-weight:700;">' + escapeHtml(km) + '</td>'
       + '<td style="padding:6px 6px;color:var(--text2);">' + escapeHtml(n.author || '') + '</td>'
       + '<td style="padding:6px 6px;color:var(--text2);white-space:nowrap;font-size:11px;">' + escapeHtml(n.time || '') + '</td>'
-      + '<td style="padding:6px 6px;text-align:right;"><button onclick="event.stopPropagation();deleteNoteFromEvidence(\'' + n.id + '\')" title="Smazat poznámku" style="background:transparent;border:none;color:#ff6b6b;cursor:pointer;font-size:14px;padding:2px 4px;">🗑</button></td>'
+      + '<td style="padding:6px 6px;text-align:right;">' + (isOwner(n, 'uid')
+          ? '<button onclick="event.stopPropagation();deleteNoteFromEvidence(\'' + n.id + '\')" title="Smazat poznámku" style="background:transparent;border:none;color:#ff6b6b;cursor:pointer;font-size:14px;padding:2px 4px;">🗑</button>'
+          : '') + '</td>'
       + '</tr>';
   });
   html += '</tbody></table>';
@@ -2712,6 +2714,17 @@ function _endPlacement() {
 
 function placeCancel() { _endPlacement(); }
 
+// ── Vlastnictví záznamu (mazat/upravovat smí jen autor) ──
+// Vrací true, když je přihlášený uživatel vlastníkem, NEBO jde o starý
+// záznam bez uloženého uid (zpětná kompatibilita se staršími daty).
+function isOwner(rec, field) {
+  field = field || 'uid';
+  if(!rec) return false;
+  var owner = rec[field];
+  if(owner === undefined || owner === null || owner === '') return true; // legacy
+  return !!(window.currentUser && window.currentUser.uid === owner);
+}
+
 function placeConfirm() {
   if(!_placeActive) return;
   var c = map.getCenter();
@@ -2963,6 +2976,7 @@ function saveNote() {
   function finish(uploadedUrls) {
     var note = { id:noteId, lat:newNoteLat, lng:newNoteLng, cat:newNoteCat,
       author:author, nazev:nazev, text:text,
+      uid:(window.currentUser ? window.currentUser.uid : null),
       photos:keepUrls.concat(uploadedUrls), time:new Date().toLocaleString('cs-CZ') };
     saveNote_toFirebase(note, null);
   }
@@ -3055,6 +3069,13 @@ function openNoteDetail(id) {
     }
   }
 
+  // Upravit/Smazat jen pro vlastníka (autor poznámky); cizím skryjeme
+  var _own = isOwner(note, 'uid');
+  var _eb = document.getElementById('note-detail-edit');
+  var _db2 = document.getElementById('note-detail-del');
+  if(_eb) _eb.style.display = _own ? '' : 'none';
+  if(_db2) _db2.style.display = _own ? '' : 'none';
+
   document.getElementById('note-detail').classList.add('open');
 }
 
@@ -3089,7 +3110,8 @@ function openPhotoFs(src, firebaseKey, item) {
   _photoFsItem = item || (typeof src === 'object' ? src : { url: url });
   if(!_photoFsItem.url) _photoFsItem.url = url;
   var delBtn = document.getElementById('photo-fs-delete');
-  if(delBtn) delBtn.style.display = _photoFsKey ? 'inline-block' : 'none';
+  // Smazat jen vlastní fotku (autor); cizí fotky nelze mazat
+  if(delBtn) delBtn.style.display = (_photoFsKey && isOwner(_photoFsItem, 'uid')) ? 'inline-block' : 'none';
   document.getElementById('photo-fs').classList.add('open');
   unlockViewport();
 }
@@ -4743,6 +4765,7 @@ function ppAnswer(yes) {
               stamped: !!yes,   // true = v galerii verze s razítkem
               so: (meta.so || ''),   // přiřazený stavební objekt (složka), '' = Nezařazené
               km: meta.km, author: meta.author,
+              uid: (window.currentUser ? window.currentUser.uid : null),
               lat: meta.lat, lng: meta.lng,
               time: new Date().toLocaleString('cs-CZ'),
               date: new Date().toLocaleDateString('cs-CZ'),
@@ -5857,6 +5880,9 @@ function renderTaskDetail(t) {
   document.getElementById('td-btn-done').style.display   = t.stav === 'done' ? 'none' : '';
   document.getElementById('td-btn-reopen').style.display = t.stav === 'done' ? '' : 'none';
   document.getElementById('td-btn-map').style.display    = (t.lat !== undefined && t.lat !== null) ? '' : 'none';
+  // Smazat úkol smí jen ten, kdo ho zadal (zadalUid)
+  var _delBtn = document.getElementById('td-btn-del');
+  if(_delBtn) _delBtn.style.display = isOwner(t, 'zadalUid') ? '' : 'none';
 
   // Komentáře
   renderComments(t);
@@ -8577,8 +8603,8 @@ function copyDiaryExport(){
     <button id="note-detail-dl-all" onclick="" style="display:none;margin:0 14px 8px;background:var(--panel2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:7px;font-size:13px;cursor:pointer;width:calc(100% - 28px);">⬇️ Stáhnout všechny fotky</button>
   <div id="note-detail-footer">
       <button class="note-close-btn" onclick="closeNoteDetail()">Zavřít</button>
-      <button class="note-edit-btn" onclick="editCurrentNote()">✏️ Upravit</button>
-      <button class="note-del-btn" onclick="deleteCurrentNote()">🗑️ Smazat</button>
+      <button id="note-detail-edit" class="note-edit-btn" onclick="editCurrentNote()">✏️ Upravit</button>
+      <button id="note-detail-del" class="note-del-btn" onclick="deleteCurrentNote()">🗑️ Smazat</button>
     </div>
   </div>
 </div>
@@ -8877,7 +8903,7 @@ function copyDiaryExport(){
       <button class="btn-success" id="td-btn-done" onclick="markTaskDone()">✅ Hotovo</button>
       <button class="btn-secondary" id="td-btn-reopen" onclick="reopenTask()" style="display:none;">↩ Znovu otevřít</button>
       <button class="btn-secondary" onclick="editTask()">✏ Upravit</button>
-      <button class="btn-danger" onclick="deleteTaskConfirm()">🗑</button>
+      <button class="btn-danger" id="td-btn-del" onclick="deleteTaskConfirm()">🗑</button>
       <button class="btn-secondary" id="td-btn-map" onclick="showTaskOnMap()" style="display:none;">📍 Mapa</button>
       <button class="btn-secondary" onclick="closeTaskDetail()">Zavřít</button>
     </div>
