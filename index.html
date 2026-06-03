@@ -109,6 +109,28 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #btn-gps { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:all .2s; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
 
+/* Tlačítko ➕ Přidat (poznámka/úkol) – nad GPS tlačítkem */
+#btn-add { position:fixed; bottom:84px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--accent); border:2px solid var(--accent); color:#fff; font-size:26px; line-height:1; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.45); transition:all .2s; }
+#btn-add:active { transform:scale(.92); }
+
+/* Křížek uprostřed mapy v režimu umístění */
+#place-cross { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1600; pointer-events:none; }
+#place-cross::before, #place-cross::after { content:''; position:absolute; background:var(--accent); box-shadow:0 0 0 1px rgba(255,255,255,.85); }
+#place-cross::before { width:2px; height:40px; left:-1px; top:-20px; }
+#place-cross::after { width:40px; height:2px; left:-20px; top:-1px; }
+#place-cross .ring { position:absolute; width:18px; height:18px; left:-9px; top:-9px; border:2px solid var(--accent); border-radius:50%; box-shadow:0 0 0 1px rgba(255,255,255,.85); }
+
+/* Banner v režimu umístění */
+#place-banner { display:none; position:fixed; top:0; left:0; right:0; z-index:1601; padding:10px 12px; background:var(--panel); border-bottom:1px solid var(--border); box-shadow:0 2px 12px rgba(0,0,0,.4); }
+#place-banner.open { display:block; }
+#place-banner .pb-title { font-size:14px; font-weight:700; color:var(--accent2); }
+#place-banner .pb-hint { font-size:12px; color:var(--text2); margin-top:2px; }
+#place-banner .pb-km { font-size:12px; font-weight:700; color:var(--text); margin-top:2px; }
+#place-banner .pb-row { display:flex; gap:8px; margin-top:8px; }
+#place-banner .pb-row button { flex:1; border:none; border-radius:10px; padding:11px; font-size:14px; font-weight:700; cursor:pointer; }
+#place-banner .pb-ok { background:var(--green); color:#fff; }
+#place-banner .pb-cancel { background:var(--panel2); color:var(--text); border:1px solid var(--border)!important; }
+
 #toast { position:fixed; bottom:80px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--panel2); border:1px solid var(--border); border-radius:8px; padding:8px 16px; font-size:13px; z-index:3000; opacity:0; transition:all .3s; white-space:nowrap; pointer-events:none; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
@@ -1177,6 +1199,19 @@ document.addEventListener('touchend', function(e){
 </div>
 
 <button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<button id="btn-add" onclick="openAddChooser()" title="Přidat poznámku nebo úkol">➕</button>
+
+<!-- Křížek + banner pro umístění poznámky/úkolu -->
+<div id="place-cross"><div class="ring"></div></div>
+<div id="place-banner">
+  <div class="pb-title" id="place-title">📝 Umístit poznámku</div>
+  <div class="pb-hint">Najeď mapou tak, aby byl křížek na požadovaném místě.</div>
+  <div class="pb-km" id="place-km"></div>
+  <div class="pb-row">
+    <button class="pb-ok" onclick="placeConfirm()">✓ Sem umístit</button>
+    <button class="pb-cancel" onclick="placeCancel()">Zrušit</button>
+  </div>
+</div>
 <div id="toast"></div>
 
 <div id="pdf-panel" style="touch-action:pan-x pan-y pinch-zoom;">
@@ -2604,46 +2639,87 @@ function clearSelectionRing() {
   selectedRingMarker = null;
 }
 
-// ── Dlouhý stisk mapy = výběr Poznámka / Úkol ─────────
-var _lpLat = null, _lpLng = null;
-function initLongPress() {
-  map.on('mousedown touchstart', function(e) {
-    var latlng = e.latlng;
-    longPressTimer = setTimeout(function() {
-      if(navigator.vibrate) navigator.vibrate(50);
-      _lpLat = latlng.lat;
-      _lpLng = latlng.lng;
-      // Legacy mód (bez Auth konfigurace) → rovnou poznámka, žádný chooser
-      if(typeof authConfigOk === 'function' && !authConfigOk()) {
-        lpChoose('note');
-        return;
-      }
-      // Spočítat km pro info
-      var kmTxt = '';
-      try {
-        if(typeof gpsToKm === 'function') {
-          var km = gpsToKm(latlng.lat, latlng.lng);
-          if(km !== null && km !== undefined) kmTxt = ' (km ' + km.toFixed(3) + ')';
-        }
-      } catch(e){}
-      document.getElementById('lp-km-info').textContent = '📍 Co tady přidat?' + kmTxt;
-      document.getElementById('lp-chooser').classList.add('open');
-    }, 700);
-  });
-  map.on('mouseup touchend touchcancel mousemove', function() {
-    if(longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-  });
+// ── Vkládání Poznámky / Úkolu přes křížek uprostřed mapy ──
+// (Nahrazuje dřívější "dlouhý stisk" – ten byl na telefonu nespolehlivý.)
+// Tok: tlačítko ➕ → výběr Poznámka/Úkol → režim umístění (křížek + banner) → potvrdit.
+var _lpLat = null, _lpLng = null;          // ponecháno kvůli kompatibilitě
+var _placeKind = null;                     // 'note' | 'task'
+var _placeActive = false;
+
+// initLongPress ponecháno jako no-op, aby se nerozbilo volání při startu mapy.
+function initLongPress() { /* dlouhý stisk vypnut – nahrazeno tlačítkem ➕ a křížkem */ }
+
+// Otevře výběr "Co přidat?" (tlačítko ➕ na mapě)
+function openAddChooser() {
+  // Legacy mód (bez Auth konfigurace) → rovnou poznámka, bez výběru
+  if(typeof authConfigOk === 'function' && !authConfigOk()) {
+    startPlacement('note');
+    return;
+  }
+  document.getElementById('lp-km-info').textContent = '📍 Co přidat?';
+  document.getElementById('lp-chooser').classList.add('open');
 }
+
 function lpCancel() {
   document.getElementById('lp-chooser').classList.remove('open');
-  _lpLat = _lpLng = null;
 }
+
+// Výběr z chooseru → spustí režim umístění křížkem
 function lpChoose(kind) {
   document.getElementById('lp-chooser').classList.remove('open');
-  if(_lpLat === null) return;
+  startPlacement(kind);
+}
+
+function startPlacement(kind) {
+  _placeKind = kind;
+  _placeActive = true;
+  var ch = document.getElementById('place-cross');
+  var banner = document.getElementById('place-banner');
+  var addBtn = document.getElementById('btn-add');
+  if(ch) ch.style.display = 'block';
+  if(banner) banner.classList.add('open');
+  if(addBtn) addBtn.style.display = 'none';
+  var t = document.getElementById('place-title');
+  if(t) t.textContent = (kind === 'task') ? '✅ Umístit úkol' : '📝 Umístit poznámku';
+  updatePlaceKm();
+  map.on('move', updatePlaceKm);
+}
+
+function updatePlaceKm() {
+  if(!_placeActive) return;
+  var c = map.getCenter();
+  var kmTxt = '';
+  try {
+    if(typeof gpsToKm === 'function') {
+      var km = gpsToKm(c.lat, c.lng);
+      if(km !== null && km !== undefined) kmTxt = 'km ' + km.toFixed(3);
+    }
+  } catch(e){}
+  var el = document.getElementById('place-km');
+  if(el) el.textContent = kmTxt || '(mimo osu trasy)';
+}
+
+function _endPlacement() {
+  _placeActive = false;
+  map.off('move', updatePlaceKm);
+  var ch = document.getElementById('place-cross');
+  var banner = document.getElementById('place-banner');
+  var addBtn = document.getElementById('btn-add');
+  if(ch) ch.style.display = 'none';
+  if(banner) banner.classList.remove('open');
+  if(addBtn) addBtn.style.display = '';
+}
+
+function placeCancel() { _endPlacement(); }
+
+function placeConfirm() {
+  if(!_placeActive) return;
+  var c = map.getCenter();
+  var lat = c.lat, lng = c.lng, kind = _placeKind;
+  _endPlacement();
   if(kind === 'note') {
-    newNoteLat = _lpLat;
-    newNoteLng = _lpLng;
+    newNoteLat = lat;
+    newNoteLng = lng;
     newNotePhotos = [];
     newNoteCat = 0;
     document.getElementById('note-author').value = localStorage.getItem('noteAuthor') || (window.currentUser ? window.currentUser.name : '');
@@ -2656,10 +2732,9 @@ function lpChoose(kind) {
     document.getElementById('note-modal').classList.add('open');
   } else if(kind === 'task') {
     var km = null;
-    try { if(typeof gpsToKm === 'function') km = gpsToKm(_lpLat, _lpLng); } catch(e){}
-    openNewTaskModal(_lpLat, _lpLng, km);
+    try { if(typeof gpsToKm === 'function') km = gpsToKm(lat, lng); } catch(e){}
+    openNewTaskModal(lat, lng, km);
   }
-  _lpLat = _lpLng = null;
 }
 
 // ── Preference razítka (km, datum, jméno) do fotek ──
