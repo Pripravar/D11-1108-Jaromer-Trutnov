@@ -1302,6 +1302,7 @@ var GITHUB_USER_REPO = 'Pripravar/D11-1108-Jaromer-Trutnov';
 var GITHUB_BRANCH_PDF = 'main';
 // Upload fotek jde přes Cloud Function (GitHub token zůstává na serveru, ne v prohlížeči).
 var UPLOAD_FN_URL = 'https://europe-west1-d11-1108-jaromer---trutnov.cloudfunctions.net/uploadFoto';
+var UPLOAD_VYKRES_FN_URL = 'https://europe-west1-d11-1108-jaromer---trutnov.cloudfunctions.net/uploadVykres';
 // Bázová cesta k PDF výkresům - RELATIVNÍ k aplikaci (na GitHub Pages).
 // Důvod: raw.githubusercontent.com servíruje PDF jako application/octet-stream
 // → iframe je nezobrazí. Pages servírují PDF jako application/pdf → iframe OK.
@@ -4182,6 +4183,7 @@ function buildPropustky() {
 function openPropPanel(prop) {
   var pPos = realKmToLatLng(prop.km); if(pPos) showSelectionRing(L.latLng(pPos[0],pPos[1]));
   currentPropId = prop.id;
+  window._currentProp = prop;
   // Varianta A: každý propustek má pole 'vykresy' s kompletní sadou (situace, PP, vzor.řezy, ...)
   // Varianta B (fallback): pokud je definován jen 'soubor' + 'tz', sestav minimální pole
   if(prop.vykresy && prop.vykresy.length) {
@@ -4208,24 +4210,63 @@ function openPropPanel(prop) {
   // Odemkni viewport, ať iOS Safari může na iframu pinch-zoomovat PDF
   unlockViewport();
 
-  // Záložky
-  var tabs = document.getElementById('prop-tabs');
-  tabs.innerHTML = '';
-  propPages.forEach(function(p, i) {
-    var btn = document.createElement('button');
-    btn.className = 'pdf-tab' + (i===0?' active':'');
-    btn.textContent = p.typ;
-    btn.onclick = (function(idx){ return function(){
-      renderPropPage(idx);
-    };})(i);
-    tabs.appendChild(btn);
-  });
+  // Záložky (statické výkresy z PDPS)
+  _buildPropTabs();
 
   // Zobraz PDF v prop-content iframe
   renderPropPage(0);
 
   // Načíst poznámky propustku
   loadPropNotes(prop.id);
+
+  // Načíst uživatelsky nahrané výkresy z DB a přidat je jako další záložky
+  loadUploadedVykresy(prop);
+}
+
+// Sestaví záložky z aktuálního pole propPages (zachová vybraný index)
+function _buildPropTabs() {
+  var tabs = document.getElementById('prop-tabs');
+  if(!tabs) return;
+  tabs.innerHTML = '';
+  propPages.forEach(function(p, i) {
+    var btn = document.createElement('button');
+    btn.className = 'pdf-tab' + (i===propPageIdx?' active':'');
+    btn.textContent = (p._uploaded ? '🆕 ' : '') + (p.typ || 'Výkres');
+    btn.onclick = (function(idx){ return function(){ renderPropPage(idx); }; })(i);
+    tabs.appendChild(btn);
+  });
+}
+
+// Klíč složky/uzlu pro daný SO objekt (např. "SO 124.1" → "SO_124.1")
+function soFolderKey(id) {
+  return String(id || 'jine').replace(/[^A-Za-z0-9._-]/g, '_');
+}
+
+// Načte nahrané výkresy z  vykresy/<soKey>  a připojí je do propPages
+function loadUploadedVykresy(prop) {
+  if(typeof db === 'undefined') return;
+  var soKey = soFolderKey(prop.id);
+  db.ref('vykresy/' + soKey).once('value').then(function(snap){
+    // Bezpečnostní pojistka – panel se mezitím mohl přepnout na jiný objekt
+    if(!window._currentProp || window._currentProp.id !== prop.id) return;
+    var staticCount = (prop.vykresy && prop.vykresy.length) ? prop.vykresy.length : propPages.length;
+    // Odeber případné staré nahrané (kdyby se volalo opakovaně) a nech jen statické
+    propPages = propPages.filter(function(p){ return !p._uploaded; });
+    snap.forEach(function(ch){
+      var v = ch.val(); if(!v || !v.soubor) return;
+      propPages.push({
+        typ: v.nazev || 'Nahraný výkres',
+        nazev: v.nazev || 'Nahraný výkres',
+        soubor: v.soubor,
+        _uploaded: true,
+        _dbKey: ch.key,
+        _soKey: soKey,
+        uid: v.uid || null,
+        author: v.author || ''
+      });
+    });
+    _buildPropTabs();
+  }).catch(function(e){ console.warn('loadUploadedVykresy:', e); });
 }
 
 function renderPropPage(idx) {
@@ -4247,6 +4288,97 @@ function renderPropPage(idx) {
   if(frameEl)    { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
   if(propZoomIn)  propZoomIn.style.display  = 'none';
   if(propZoomOut) propZoomOut.style.display = 'none';
+  // Koš jen u nahraného výkresu, který patří přihlášenému uživateli
+  var delBtn = document.getElementById('btn-prop-del-vykres');
+  if(delBtn) delBtn.style.display = (p._uploaded && isOwner(p, 'uid')) ? '' : 'none';
+}
+
+// ── Nahrání PDF výkresu k aktuálnímu SO objektu ──────────
+function addVykresForCurrentSO() {
+  var prop = window._currentProp;
+  if(!prop) { showToast('Nejdřív otevři objekt', 2000); return; }
+  var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
+  if(!user) { showToast('Nejdřív se přihlas', 2200); return; }
+  var inp = document.getElementById('vykres-file-input');
+  if(!inp) return;
+  inp.value = '';
+  inp.onchange = function(e) {
+    var file = e.target.files && e.target.files[0];
+    inp.value = '';
+    if(!file) return;
+    var nm = (file.name || '').toLowerCase();
+    if(nm.slice(-4) !== '.pdf') { showToast('Vyber soubor PDF', 2500); return; }
+    if(file.size > 7.5 * 1024 * 1024) {
+      showToast('❌ PDF je moc velké (max ~7 MB). Zmenši ho nebo rozděl.', 4000); return;
+    }
+    var nazev = prompt('Název výkresu (jak se zobrazí):', file.name.replace(/\.pdf$/i, ''));
+    if(nazev === null) return;
+    nazev = (nazev || '').trim() || file.name.replace(/\.pdf$/i, '');
+    _doUploadVykres(prop, file, nazev);
+  };
+  inp.click();
+}
+
+function _doUploadVykres(prop, file, nazev) {
+  var soKey = soFolderKey(prop.id);
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var base64 = String(ev.target.result || '').replace(/^data:[^;]+;base64,/, '');
+    if(!base64) { showToast('❌ Nepodařilo se načíst soubor', 3000); return; }
+    var ts = Date.now();
+    var safe = nazev.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').slice(0, 60) || 'vykres';
+    var filename = soKey + '/' + ts + '_' + safe + '.pdf';   // commit → pdf/uploads/<filename>
+    var user = fbAuth.currentUser;
+    showSync('⏳ Nahrávám výkres…');
+    user.getIdToken().then(function(idToken){
+      return fetch(UPLOAD_VYKRES_FN_URL, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: filename, content: base64 })
+      });
+    })
+    .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, data:d }; }); })
+    .then(function(res){
+      if(!res.ok || !res.data || !res.data.download_url) {
+        var msg = (res.data && res.data.error) ? res.data.error : 'neznámá chyba';
+        hideSync(); showToast('❌ Upload: ' + msg, 4500); return;
+      }
+      // Zápis do registru výkresů (servírujeme přes GitHub Pages = application/pdf)
+      var entry = {
+        nazev: nazev,
+        soubor: 'pdf/uploads/' + filename,
+        uid: (window.currentUser ? window.currentUser.uid : null),
+        author: (window.currentUser ? window.currentUser.name : ''),
+        time: new Date().toLocaleString('cs-CZ'),
+        ts: ts
+      };
+      db.ref('vykresy/' + soKey).push(entry).then(function(){
+        hideSync();
+        showToast('✅ Výkres nahrán. Zobrazí se do 1–2 min (publikace).', 4500);
+        if(window._currentProp && window._currentProp.id === prop.id) loadUploadedVykresy(prop);
+      }).catch(function(err){
+        hideSync();
+        console.error('Zápis vykresu selhal:', err);
+        showToast('❌ Soubor nahrán, ale zápis do DB selhal (pravidla?)', 4500);
+      });
+    })
+    .catch(function(e){ hideSync(); console.error('uploadVykres exc:', e); showToast('❌ Síťová chyba uploadu', 3500); });
+  };
+  reader.readAsDataURL(file);
+}
+
+function deleteCurrentVykres() {
+  var p = propPages[propPageIdx];
+  if(!p || !p._uploaded) return;
+  if(!isOwner(p, 'uid')) { showToast('Smazat může jen ten, kdo výkres nahrál', 3000); return; }
+  if(!confirm('Smazat nahraný výkres "' + (p.nazev || '') + '"?')) return;
+  db.ref('vykresy/' + p._soKey + '/' + p._dbKey).remove().then(function(){
+    showToast('🗑️ Výkres smazán', 1800);
+    // Přepni na první záložku a načti znovu
+    propPageIdx = 0;
+    if(window._currentProp) loadUploadedVykresy(window._currentProp);
+    renderPropPage(0);
+  }).catch(function(){ showToast('❌ Mazání selhalo', 2500); });
 }
 
 // PDF.js renderer pro panel propustků (analogicky k renderPdfOnCanvas)
@@ -8735,9 +8867,12 @@ function copyDiaryExport(){
     <button id="btn-prop-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-prop-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
     <button onclick="if(currentPropSrc)window.open(currentPropSrc,'_blank')" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
+    <button id="btn-prop-add-vykres" onclick="addVykresForCurrentSO()" title="Přidat PDF výkres k tomuto objektu" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px 6px;font-weight:700;">➕📄</button>
+    <button id="btn-prop-del-vykres" onclick="deleteCurrentVykres()" title="Smazat nahraný výkres" style="display:none;background:none;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:4px 6px;">🗑</button>
     <button id="btn-prop-fs" onclick="togglePropFs()">⛶</button>
     <button id="btn-prop-close" onclick="closePropPanel()">✕</button>
   </div>
+  <input type="file" id="vykres-file-input" accept="application/pdf,.pdf" style="display:none;">
   <div id="prop-tabs"></div>
   <div id="prop-content" style="flex:1;display:flex;flex-direction:column;min-height:0;">
     <iframe id="prop-iframe" src="" style="flex:1;width:100%;border:none;display:none;touch-action:pan-x pan-y pinch-zoom;"></iframe>
