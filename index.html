@@ -5209,6 +5209,12 @@ function normalizePhone(input) {
   return s; // necháme být - Firebase odmítne pokud je špatné
 }
 
+// Denní limit přihlášení přes telefon – ochrana nákladů na SMS.
+// Počítáme DOKONČENÁ přihlášení do /sms_limit/<datum> (uzel je veřejně čitelný,
+// zápis jen pro přihlášené – viz pravidla DB). Po dosažení limitu se SMS neposílá.
+var SMS_DENNI_LIMIT = 5;
+function _smsLimitKey(){ return new Date().toLocaleDateString('sv-SE'); } // YYYY-MM-DD v lokálním (CZ) čase
+
 function sendSmsCode() {
   var raw = document.getElementById('phone-input').value;
   var phone = normalizePhone(raw);
@@ -5216,6 +5222,22 @@ function sendSmsCode() {
     showAuthError('Zadej platné telefonní číslo (např. +420600123456)');
     return;
   }
+  showAuthError('⏳ Kontroluji denní limit…');
+  // Nejdřív zkontroluj denní počítadlo (čteme bez přihlášení → uzel je veřejně čitelný)
+  db.ref('sms_limit/' + _smsLimitKey()).once('value').then(function(snap){
+    var pocet = snap.val() || 0;
+    if(pocet >= SMS_DENNI_LIMIT){
+      showAuthError('📵 Denní limit přihlášení přes telefon (' + SMS_DENNI_LIMIT + '/den) je vyčerpaný. Zkus to prosím zítra, nebo se přihlas přes Google.');
+      return;
+    }
+    _odeslatSms(phone);
+  }).catch(function(){
+    // Když počítadlo nelze přečíst (výpadek), raději přihlášení neblokujeme.
+    _odeslatSms(phone);
+  });
+}
+
+function _odeslatSms(phone) {
   showAuthError('⏳ Odesílám SMS…');
   var verifier = _ensureRecaptcha();
   if(!verifier) {
@@ -5252,7 +5274,12 @@ function verifySmsCode() {
   showAuthError('⏳ Ověřuji…');
   window._phoneConfirm.confirm(code)
     .then(function(result){
-      // Přihlášeno. onAuthStateChanged se postará o zobrazení pohledu "name"
+      // Úspěšné přihlášení → připočti do denního počítadla (teď už jsme přihlášení,
+      // takže zápis projde i při pravidle auth != null).
+      try {
+        db.ref('sms_limit/' + _smsLimitKey()).transaction(function(cur){ return (cur || 0) + 1; });
+      } catch(e){ console.warn('sms_limit increment selhal', e); }
+      // onAuthStateChanged se postará o zobrazení pohledu "name"
       // pro nové uživatele, nebo o completeLogin pro stávající.
       showAuthError('');
     })
