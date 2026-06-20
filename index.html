@@ -371,6 +371,15 @@ textarea.note-field { min-height:80px; resize:vertical; }
 }
 #sync-indicator.show { display:block; }
 
+/* Odznak nahrávání fotek na pozadí (nezávislý na sync-indicatoru) */
+#upload-badge {
+  position:fixed; bottom:112px; left:12px; background:var(--accent);
+  border:none; border-radius:8px; padding:7px 11px;
+  font-size:12px; font-weight:700; color:#fff; z-index:1250; display:none;
+  box-shadow:0 2px 10px rgba(0,0,0,.4);
+}
+#upload-badge.show { display:block; }
+
 
 #note-edit-modal {
   position:fixed; inset:0; background:rgba(0,0,0,.7);
@@ -4813,6 +4822,117 @@ function _closeSOPicker(){
 // ── Foto-flow: vyfotit → razítkovat? → vyfotit další? → smyčka ─────
 window.photoSession = {count: 0, pendingPhoto: null, pendingMeta: null, phase: null};
 
+// ── Miniatura pro galerii (malý JPEG, rychlé načítání mřížky) ──
+function makeThumb(dataUrl, cb, maxPx, quality) {
+  maxPx = maxPx || 320; quality = quality || 0.6;
+  var img = new Image();
+  img.onload = function(){
+    var w = img.width, h = img.height;
+    if(w > maxPx || h > maxPx){ if(w > h){ h = Math.round(h*maxPx/w); w = maxPx; } else { w = Math.round(w*maxPx/h); h = maxPx; } }
+    var c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    try { cb(c.toDataURL('image/jpeg', quality)); } catch(e){ cb(null); }
+  };
+  img.onerror = function(){ cb(null); };
+  img.src = dataUrl;
+}
+
+// Unikátní rostoucí timestamp (klíč + jméno souboru) – i při rychlém focení
+var _lastPhotoTs = 0;
+function _uniquePhotoTs(){ var t = Date.now(); if(t <= _lastPhotoTs) t = _lastPhotoTs + 1; _lastPhotoTs = t; return t; }
+
+// ── Fronta uploadů na pozadí – focení NEČEKÁ na nahrání ──
+var _photoQueue = [];
+var _photoWorkerActive = false;
+var _photoPending = 0;   // počet fotek, které čekají/nahrávají se
+
+function _enqueuePhotoUpload(job){
+  _photoQueue.push(job);
+  _photoPending++;
+  _updateUploadBadge();
+  _drainPhotoQueue();
+}
+function _drainPhotoQueue(){
+  if(_photoWorkerActive) return;
+  var job = _photoQueue.shift();
+  if(!job) return;
+  _photoWorkerActive = true;
+  _processPhotoJob(job, function(ok){
+    _photoWorkerActive = false;
+    if(!ok && (job.tries || 0) < 1){
+      // 1× zkus znovu (typicky výpadek sítě) – pending se nesnižuje
+      job.tries = (job.tries || 0) + 1;
+      _photoQueue.push(job);
+    } else {
+      if(!ok) showToast('❌ Fotka se nenahrála ani na 2. pokus', 3500);
+      _photoPending = Math.max(0, _photoPending - 1);
+    }
+    _updateUploadBadge();
+    setTimeout(_drainPhotoQueue, 300);
+  });
+}
+function _updateUploadBadge(){
+  var el = document.getElementById('upload-badge');
+  if(!el) return;
+  if(_photoPending > 0){
+    el.textContent = '⬆️ Nahrávám fotky: ' + _photoPending;
+    clearTimeout(window._uploadBadgeHide);
+    el.classList.add('show');
+  } else {
+    el.textContent = '✅ Fotky nahrané';
+    el.classList.add('show');
+    clearTimeout(window._uploadBadgeHide);
+    window._uploadBadgeHide = setTimeout(function(){ el.classList.remove('show'); }, 2500);
+  }
+}
+
+// Zpracování jedné fotky na pozadí: razítko → upload (stamped+orig+thumb) → zápis do DB.
+// Uploady jdou SEKVENČNĚ (GitHub neumí paralelní PUT do stejné větve – jinak 409).
+function _processPhotoJob(job, done){
+  var compressed = job.compressed, meta = job.meta, yes = job.stamp, t = job.ts;
+  burnInMetadata(compressed, meta.km, meta.author, function(stampedDataUrl){
+    var fnOrig  = 'standalone/foto_' + t + '_o.jpg';
+    var fnStamp = 'standalone/foto_' + t + '_s.jpg';
+    var fnThumb = 'standalone/foto_' + t + '_t.jpg';
+    var visibleSrc = yes ? stampedDataUrl : compressed;
+    var firstSrc, firstFn, secondSrc, secondFn;
+    if(yes){ firstSrc = stampedDataUrl; firstFn = fnStamp; secondSrc = compressed;     secondFn = fnOrig; }
+    else   { firstSrc = compressed;     firstFn = fnOrig;  secondSrc = stampedDataUrl; secondFn = fnStamp; }
+    uploadPhotoToGitHubP(firstSrc, firstFn).then(function(url1){
+      if(!url1){ done(false); return; }
+      setTimeout(function(){
+        uploadPhotoToGitHubP(secondSrc, secondFn).then(function(url2){
+          makeThumb(visibleSrc, function(thumbData){
+            function finishEntry(thumbUrl){
+              var urlOrig  = yes ? url2 : url1;
+              var urlStamp = yes ? url1 : url2;
+              var visibleUrl = yes ? urlStamp : urlOrig;
+              var entry = {
+                url: visibleUrl, stamped: !!yes, so: (meta.so || ''),
+                km: meta.km, author: meta.author,
+                uid: (window.currentUser ? window.currentUser.uid : null),
+                lat: meta.lat, lng: meta.lng,
+                time: new Date().toLocaleString('cs-CZ'),
+                date: new Date().toLocaleDateString('cs-CZ'), ts: t
+              };
+              if(urlOrig)  entry.urlOriginal = urlOrig;
+              if(urlStamp) entry.urlStamped  = urlStamp;
+              if(thumbUrl) entry.thumb = thumbUrl;
+              db.ref('standalone_photos/' + String(t)).set(entry)
+                .then(function(){ done(true); })
+                .catch(function(){ done(false); });
+            }
+            if(!thumbData){ finishEntry(null); return; }
+            setTimeout(function(){
+              uploadPhotoToGitHubP(thumbData, fnThumb).then(function(turl){ finishEntry(turl || null); });
+            }, 600);
+          });
+        });
+      }, 600);
+    }).catch(function(){ done(false); });
+  });
+}
+
 function takeStandalonePhoto() {
   if(!gpsActive || !gpsMarker) {
     showToast('⚠️ Zapni si GPS!', 3000);
@@ -4838,7 +4958,8 @@ function _showContinuePrompt() {
   document.getElementById('pp-title').innerHTML = '📸 Vyfotit další fotku?';
   document.getElementById('pp-yes').textContent = '📷 Ano, další';
   document.getElementById('pp-no').textContent  = '✅ Hotovo';
-  document.getElementById('pp-counter').textContent = '📸 V sérii uloženo: ' + window.photoSession.count;
+  document.getElementById('pp-counter').textContent = '📸 V sérii vyfoceno: ' + window.photoSession.count
+    + (_photoPending > 0 ? '  •  ⬆️ nahrávám ' + _photoPending : '');
   window.photoSession.phase = 'continue';
   document.getElementById('photo-prompt-modal').classList.add('open');
 }
@@ -4859,70 +4980,13 @@ function ppAnswer(yes) {
     sess.pendingPhoto = null;
     if(!compressed || !meta) { _showContinuePrompt(); return; }
 
-    // VŽDY ukládáme obě verze (originál + s razítkem). 'yes' = uživatelova preference pro galerii.
-    // V galerii pak vidí jen tu verzi co si přál; ale obě jsou k dispozici pro download.
-    // Důležité: GitHub API neumí 2 paralelní PUTy do stejné větve - musí jít SEKVENČNĚ,
-    // jinak druhý request selže s 409 (parent SHA konflikt).
-    showSync('⏳ Připravuji razítko...');
-    burnInMetadata(compressed, meta.km, meta.author, function(stampedDataUrl) {
-      var t = Date.now();
-      var fnOrig  = 'standalone/foto_' + t + '_o.jpg';   // _o = original
-      var fnStamp = 'standalone/foto_' + t + '_s.jpg';   // _s = stamped
-
-      // Pořadí uploadu: nejdřív preferovaná verze (aby v případě selhání 2. uploadu
-      // měla galerie aspoň tu správnou). 'yes'=true → nejdřív razítko, jinak originál.
-      var firstSrc, firstFn, secondSrc, secondFn;
-      if(yes) { firstSrc = stampedDataUrl; firstFn = fnStamp; secondSrc = compressed;      secondFn = fnOrig;  }
-      else    { firstSrc = compressed;      firstFn = fnOrig;  secondSrc = stampedDataUrl; secondFn = fnStamp; }
-
-      showSync('⏳ Nahrávám 1/2...');
-      uploadPhotoToGitHubP(firstSrc, firstFn).then(function(url1){
-        if(!url1) {
-          hideSync();
-          showToast('❌ Upload preferované verze selhal', 3000);
-          _showContinuePrompt();
-          return;
-        }
-        showSync('⏳ Nahrávám 2/2...');
-        // Krátké zpoždění aby GitHub stihl propsat předchozí commit
-        setTimeout(function(){
-          uploadPhotoToGitHubP(secondSrc, secondFn).then(function(url2){
-            // Mapování zpět - kterou ze dvou jsme nahráli první/druhou
-            var urlOrig  = yes ? url2 : url1;
-            var urlStamp = yes ? url1 : url2;
-            // 'url' v galerii = co si uživatel přál
-            var visibleUrl = yes ? urlStamp : urlOrig;
-            var entry = {
-              url: visibleUrl,
-              stamped: !!yes,   // true = v galerii verze s razítkem
-              so: (meta.so || ''),   // přiřazený stavební objekt (složka), '' = Nezařazené
-              km: meta.km, author: meta.author,
-              uid: (window.currentUser ? window.currentUser.uid : null),
-              lat: meta.lat, lng: meta.lng,
-              time: new Date().toLocaleString('cs-CZ'),
-              date: new Date().toLocaleDateString('cs-CZ'),
-              ts: Date.now()
-            };
-            if(urlOrig)  entry.urlOriginal = urlOrig;
-            if(urlStamp) entry.urlStamped  = urlStamp;
-
-            var key = String(t);
-            db.ref('standalone_photos/' + key).set(entry)
-              .then(function() {
-                sess.count++;
-                hideSync();
-                if(!url2) showToast('⚠ Druhá verze se nenahrála, máš jen ' + (yes?'s razítkem':'originál'), 3000);
-                _showContinuePrompt();
-              })
-              .catch(function() {
-                hideSync();
-                showToast('❌ Chyba uložení do DB', 2500);
-                _showContinuePrompt();
-              });
-          });
-        }, 600);
-      });
-    });
+    // NOVĚ: fotka se jen zařadí do fronty a nahrává se na POZADÍ.
+    // Uživatel může hned fotit dál – nečeká ~10 s na upload.
+    // Razítko + obě verze (orig + stamped) + miniatura řeší _processPhotoJob.
+    _enqueuePhotoUpload({ compressed: compressed, meta: meta, stamp: !!yes, ts: _uniquePhotoTs() });
+    sess.count++;
+    _showContinuePrompt();
+    return;
   } else if(sess.phase === 'continue') {
     if(yes) {
       // Otevři foťák znovu
@@ -4930,9 +4994,12 @@ function ppAnswer(yes) {
         try { document.getElementById('standalone-photo-input').click(); } catch(e){}
       }, 200);
     } else {
-      // Konec série
+      // Konec série – upload může ještě dobíhat na pozadí
       if(sess.count > 0) {
-        showToast('✅ Hotovo, uloženo ' + sess.count + ' ' + (sess.count === 1 ? 'fotka' : (sess.count < 5 ? 'fotky' : 'fotek')), 2500);
+        var slovo = (sess.count === 1 ? 'fotka' : (sess.count < 5 ? 'fotky' : 'fotek'));
+        var msg = '✅ Vyfoceno ' + sess.count + ' ' + slovo;
+        if(_photoPending > 0) msg += ' • ⬆️ nahrávám ' + _photoPending + ' na pozadí';
+        showToast(msg, 2800);
       }
       sess.count = 0;
     }
@@ -5083,7 +5150,9 @@ function _galleryItemEl(item) {
   div.setAttribute('data-gk', k);
   if(gallerySelectedKeys[k]) div.classList.add('selected');
   var img = document.createElement('img');
-  img.src = item.url; img.loading = 'lazy';
+  // Náhled v galerii = miniatura (rychlé načítání). Plná kvalita až po otevření.
+  // Starší fotky bez miniatury → fallback na plnou fotku.
+  img.src = item.thumb || item.url; img.loading = 'lazy'; img.decoding = 'async';
   (function(it, divRef) {
     img.onclick = function() {
       if(gallerySelectMode) { _toggleGallerySelection(it, divRef); }
@@ -8825,6 +8894,7 @@ function copyDiaryExport(){
 
 <!-- Sync indikátor -->
 <div id="sync-indicator">⏳ Ukládám...</div>
+<div id="upload-badge"></div>
 
 
 <!-- Editace poznámky -->
