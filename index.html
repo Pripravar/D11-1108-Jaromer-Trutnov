@@ -1202,6 +1202,10 @@ document.addEventListener('touchend', function(e){
     <label>📍 GPS poloha</label>
     <label class="toggle"><input type="checkbox" id="lyr-gps" checked onchange="toggleGPS(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row">
+    <label>🛢️ Vrtné sondy (geotechnika)</label>
+    <label class="toggle"><input type="checkbox" id="lyr-sondy" onchange="setSondyVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
     <label>🏷️ Razítko (km, datum, jméno)</label>
@@ -1508,7 +1512,7 @@ var gpsActive = false;
 var gpsCentering = false;
 var gpxCumulative = [];
 var calibSorted = null;
-var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null};
+var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, sondy:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null};
 
 // ── MATH ──────────────────────────────
 function haversine(lat1,lon1,lat2,lon2) {
@@ -2389,6 +2393,7 @@ function init() {
   if(CISTENI_PRIKOPY.vpravo.length || CISTENI_PRIKOPY.vlevo.length) buildPrikopy();
   buildPropustky();
   buildDoplnky();
+  buildSondy();          // vrtné sondy – vrstva defaultně VYPNUTÁ (zapne checkbox ve Vrstvách)
   buildVedeniNN();
   map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
   startGPS();
@@ -4249,6 +4254,162 @@ function buildPrikopy() {
 
 // DOPLŇKOVÉ SO - vykresluje markery s barvou dle kategorie (000/300/400/500)
 var doplnkyLayer = null;
+// ── VRTNÉ SONDY – body na mapě (vrstva defaultně VYPNUTÁ) ─────────────
+// Souřadnice z geodetického seznamu (A11 seznam souřadnic), JTSK→WGS84 (pyproj 5514).
+// Jen sondy u trasy v úseku 129,3–133,0. Per-sondu PDF profil neexistuje →
+// popup odkáže na geotech panel (podélné geo profily A.3.x).
+var SONDA_BARVA = { jadro:'#1f78b4', hydro:'#0ea5a4' };
+var SONDY_BODY = [
+  {c:"DP1013", lat:50.507241, lng:15.91523, z:505.33, sek:"jadro"},
+  {c:"DP991", lat:50.503431, lng:15.907919, z:517.49, sek:"jadro"},
+  {c:"DP994", lat:50.503807, lng:15.908469, z:522.54, sek:"jadro"},
+  {c:"HJ1015", lat:50.507937, lng:15.91399, z:509.25, sek:"hydro"},
+  {c:"HJ1051", lat:50.517012, lng:15.919339, z:534.92, sek:"hydro"},
+  {c:"HJ1056", lat:50.51925, lng:15.918292, z:533.54, sek:"hydro"},
+  {c:"HJ962", lat:50.498559, lng:15.898381, z:533.57, sek:"hydro"},
+  {c:"HJ971", lat:50.501183, lng:15.901918, z:537.29, sek:"hydro"},
+  {c:"HJ995", lat:50.503895, lng:15.908622, z:523.44, sek:"hydro"},
+  {c:"J1000", lat:50.504366, lng:15.910856, z:509.52, sek:"jadro"},
+  {c:"J1001", lat:50.504832, lng:15.911162, z:505.02, sek:"jadro"},
+  {c:"J1002", lat:50.504433, lng:15.911636, z:506.89, sek:"jadro"},
+  {c:"J1003", lat:50.50494, lng:15.912031, z:501.69, sek:"jadro"},
+  {c:"J1004", lat:50.505439, lng:15.912154, z:500.35, sek:"jadro"},
+  {c:"J1005", lat:50.504975, lng:15.912908, z:499.8, sek:"jadro"},
+  {c:"J1006", lat:50.505678, lng:15.913297, z:498.94, sek:"jadro"},
+  {c:"J1007", lat:50.506237, lng:15.913767, z:501.61, sek:"jadro"},
+  {c:"J1008", lat:50.505981, lng:15.91419, z:499.71, sek:"jadro"},
+  {c:"J1009", lat:50.506826, lng:15.913368, z:505.7, sek:"jadro"},
+  {c:"J1010", lat:50.506641, lng:15.914637, z:503.16, sek:"jadro"},
+  {c:"J1011", lat:50.50742, lng:15.913968, z:507.44, sek:"jadro"},
+  {c:"J1012", lat:50.506521, lng:15.916035, z:501.95, sek:"jadro"},
+  {c:"J1014", lat:50.507145, lng:15.915434, z:504.97, sek:"jadro"},
+  {c:"J1016", lat:50.50734, lng:15.916863, z:501.95, sek:"jadro"},
+  {c:"J1017", lat:50.508226, lng:15.916078, z:501.89, sek:"jadro"},
+  {c:"J1018", lat:50.508042, lng:15.916663, z:499.36, sek:"jadro"},
+  {c:"J1019", lat:50.507813, lng:15.917104, z:498.38, sek:"jadro"},
+  {c:"J1021", lat:50.508374, lng:15.917064, z:495.37, sek:"jadro"},
+  {c:"J1022", lat:50.509083, lng:15.916433, z:495.92, sek:"jadro"},
+  {c:"J1023", lat:50.509335, lng:15.916617, z:498.88, sek:"jadro"},
+  {c:"J1024", lat:50.509102, lng:15.917476, z:500.68, sek:"jadro"},
+  {c:"J1025", lat:50.510067, lng:15.91741, z:508.32, sek:"jadro"},
+  {c:"J1026", lat:50.510008, lng:15.917797, z:507.71, sek:"jadro"},
+  {c:"J1027", lat:50.51143, lng:15.917869, z:508.99, sek:"jadro"},
+  {c:"J1028", lat:50.511327, lng:15.918585, z:506.53, sek:"jadro"},
+  {c:"J1029", lat:50.511824, lng:15.917956, z:508.06, sek:"jadro"},
+  {c:"J1030", lat:50.511752, lng:15.918692, z:506.6, sek:"jadro"},
+  {c:"J1031", lat:50.512956, lng:15.918177, z:509.23, sek:"jadro"},
+  {c:"J1032", lat:50.512895, lng:15.918926, z:510.2, sek:"jadro"},
+  {c:"J1033", lat:50.513394, lng:15.918221, z:509.78, sek:"jadro"},
+  {c:"J1034", lat:50.513329, lng:15.918942, z:511.54, sek:"jadro"},
+  {c:"J1035", lat:50.513831, lng:15.918245, z:511.53, sek:"jadro"},
+  {c:"J1036", lat:50.513805, lng:15.918956, z:512.67, sek:"jadro"},
+  {c:"J1037", lat:50.5143, lng:15.918289, z:514.37, sek:"jadro"},
+  {c:"J1038", lat:50.514278, lng:15.919025, z:514.63, sek:"jadro"},
+  {c:"J1039", lat:50.514752, lng:15.918667, z:517.63, sek:"jadro"},
+  {c:"J1040", lat:50.51566, lng:15.91855, z:525.31, sek:"jadro"},
+  {c:"J1041", lat:50.515657, lng:15.918839, z:525.47, sek:"jadro"},
+  {c:"J1042", lat:50.51611, lng:15.918529, z:529.45, sek:"jadro"},
+  {c:"J1043", lat:50.516113, lng:15.918889, z:529.54, sek:"jadro"},
+  {c:"J1044", lat:50.516528, lng:15.918447, z:532.79, sek:"jadro"},
+  {c:"J1045", lat:50.51652, lng:15.919001, z:532.43, sek:"jadro"},
+  {c:"J1046", lat:50.516571, lng:15.917033, z:532.21, sek:"jadro"},
+  {c:"J1048", lat:50.516464, lng:15.920151, z:531.3, sek:"jadro"},
+  {c:"J1049", lat:50.51553, lng:15.920316, z:524.36, sek:"jadro"},
+  {c:"J1050", lat:50.51704, lng:15.918221, z:536.15, sek:"jadro"},
+  {c:"J1052", lat:50.517956, lng:15.918218, z:536.97, sek:"jadro"},
+  {c:"J1053", lat:50.517907, lng:15.919359, z:533.93, sek:"jadro"},
+  {c:"J1054", lat:50.518386, lng:15.91827, z:535.68, sek:"jadro"},
+  {c:"J1055", lat:50.51836, lng:15.919339, z:530.53, sek:"jadro"},
+  {c:"J1057", lat:50.519229, lng:15.919452, z:528.61, sek:"jadro"},
+  {c:"J1058", lat:50.519689, lng:15.919525, z:530.53, sek:"jadro"},
+  {c:"J1059", lat:50.520538, lng:15.919383, z:528.11, sek:"jadro"},
+  {c:"J1060", lat:50.52151, lng:15.919712, z:505.02, sek:"jadro"},
+  {c:"J1061", lat:50.521614, lng:15.919984, z:503.18, sek:"jadro"},
+  {c:"J1062", lat:50.521903, lng:15.919917, z:497.97, sek:"jadro"},
+  {c:"J1064", lat:50.522335, lng:15.920168, z:495.26, sek:"jadro"},
+  {c:"J1065", lat:50.522422, lng:15.920436, z:493.47, sek:"jadro"},
+  {c:"J1067", lat:50.5228, lng:15.920667, z:499.66, sek:"jadro"},
+  {c:"J1068", lat:50.523289, lng:15.921066, z:503.7, sek:"jadro"},
+  {c:"J1069", lat:50.523949, lng:15.921188, z:502.38, sek:"jadro"},
+  {c:"J1070", lat:50.52386, lng:15.921491, z:501.06, sek:"jadro"},
+  {c:"J952", lat:50.495587, lng:15.895832, z:517.95, sek:"jadro"},
+  {c:"J953", lat:50.495384, lng:15.896597, z:516.24, sek:"jadro"},
+  {c:"J954", lat:50.49597, lng:15.896187, z:519.84, sek:"jadro"},
+  {c:"J955", lat:50.495767, lng:15.896837, z:518.94, sek:"jadro"},
+  {c:"J956", lat:50.496195, lng:15.896756, z:521.28, sek:"jadro"},
+  {c:"J957", lat:50.49723, lng:15.897266, z:528.72, sek:"jadro"},
+  {c:"J958", lat:50.497009, lng:15.897798, z:527.53, sek:"jadro"},
+  {c:"J959", lat:50.497693, lng:15.897586, z:532.22, sek:"jadro"},
+  {c:"J960", lat:50.497454, lng:15.898312, z:530.4, sek:"jadro"},
+  {c:"J961", lat:50.497987, lng:15.898367, z:532.41, sek:"jadro"},
+  {c:"J963", lat:50.498231, lng:15.899164, z:528.49, sek:"jadro"},
+  {c:"J964", lat:50.498962, lng:15.89895, z:532.63, sek:"jadro"},
+  {c:"J965", lat:50.498661, lng:15.899602, z:529.37, sek:"jadro"},
+  {c:"J966", lat:50.499302, lng:15.899458, z:529.58, sek:"jadro"},
+  {c:"J967", lat:50.499001, lng:15.900043, z:527.78, sek:"jadro"},
+  {c:"J968", lat:50.50042, lng:15.900998, z:532.01, sek:"jadro"},
+  {c:"J969", lat:50.500023, lng:15.901567, z:528.06, sek:"jadro"},
+  {c:"J970", lat:50.500567, lng:15.901885, z:533.66, sek:"jadro"},
+  {c:"J972", lat:50.500612, lng:15.902757, z:533.19, sek:"jadro"},
+  {c:"J973", lat:50.501149, lng:15.90296, z:535.71, sek:"jadro"},
+  {c:"J974", lat:50.50171, lng:15.903191, z:535.11, sek:"jadro"},
+  {c:"J975", lat:50.501143, lng:15.903835, z:531.8, sek:"jadro"},
+  {c:"J976", lat:50.501633, lng:15.904001, z:530.49, sek:"jadro"},
+  {c:"J977", lat:50.501926, lng:15.904368, z:524.88, sek:"jadro"},
+  {c:"J978", lat:50.501743, lng:15.904585, z:523.41, sek:"jadro"},
+  {c:"J979", lat:50.502206, lng:15.905383, z:511.94, sek:"jadro"},
+  {c:"J980", lat:50.50232, lng:15.905478, z:511.0, sek:"jadro"},
+  {c:"J981", lat:50.50221, lng:15.905586, z:509.94, sek:"jadro"},
+  {c:"J982", lat:50.502476, lng:15.905878, z:507.86, sek:"jadro"},
+  {c:"J983", lat:50.502364, lng:15.905982, z:506.91, sek:"jadro"},
+  {c:"J985", lat:50.502547, lng:15.906455, z:503.77, sek:"jadro"},
+  {c:"J986", lat:50.502842, lng:15.906819, z:504.3, sek:"jadro"},
+  {c:"J987", lat:50.502726, lng:15.906929, z:503.89, sek:"jadro"},
+  {c:"J988", lat:50.503, lng:15.907237, z:509.02, sek:"jadro"},
+  {c:"J989", lat:50.502886, lng:15.907271, z:507.53, sek:"jadro"},
+  {c:"J990", lat:50.502975, lng:15.907409, z:509.87, sek:"jadro"},
+  {c:"J992", lat:50.503088, lng:15.908284, z:512.66, sek:"jadro"},
+  {c:"J993", lat:50.50275, lng:15.908623, z:511.42, sek:"jadro"},
+  {c:"J996", lat:50.503313, lng:15.908983, z:520.26, sek:"jadro"},
+  {c:"J997", lat:50.50375, lng:15.909377, z:522.19, sek:"jadro"},
+  {c:"J998", lat:50.504228, lng:15.90978, z:517.16, sek:"jadro"},
+  {c:"J999", lat:50.503806, lng:15.910196, z:519.49, sek:"jadro"},
+  {c:"PJ1063", lat:50.521994, lng:15.920185, z:496.57, sek:"jadro"},
+  {c:"PJ1066", lat:50.522721, lng:15.920369, z:499.95, sek:"jadro"},
+  {c:"PJ984", lat:50.502658, lng:15.90635, z:503.93, sek:"jadro"}
+];
+var sondyLayer = null;
+function buildSondy(){
+  if(sondyLayer) return;
+  sondyLayer = L.layerGroup();
+  layerGroups.sondy = sondyLayer;
+  (typeof SONDY_BODY!=='undefined' ? SONDY_BODY : []).forEach(function(b){
+    if(b.lat==null||b.lng==null) return;
+    var col = SONDA_BARVA[b.sek] || '#1f78b4';
+    var icon = L.divIcon({className:'', iconSize:[0,0],
+      html:'<div style="position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;">'
+        +'<div style="width:9px;height:9px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);"></div>'
+        +'<div style="margin-top:1px;background:rgba(255,255,255,.85);color:#222;font-size:9px;font-weight:700;line-height:1;padding:0 3px;border-radius:4px;white-space:nowrap;">'+b.c+'</div></div>'});
+    var m = L.marker([b.lat,b.lng],{icon:icon, interactive:true, zIndexOffset:150});
+    var km = (typeof gpsToKm==='function') ? gpsToKm(b.lat,b.lng) : null;
+    var kmTxt = (km==null||isNaN(km)) ? '' : ('stani\u010den\u00ed ~ km '+km.toFixed(3).replace('.',',')+'<br>');
+    var sekTxt = {jadro:'j\u00e1drov\u00fd vrt',hydro:'hydrogeologick\u00fd vrt'}[b.sek] || '';
+    m.bindPopup('<div style="font-size:13px;min-width:170px;">'
+      +'<div style="font-weight:800;font-size:15px;">\ud83d\udee2\ufe0f Vrt '+b.c+'</div>'
+      +'<div style="margin-top:3px;">'+kmTxt+'v\u00fd\u0161ka <b>Z = '+b.z.toFixed(2)+' m</b> n.m.</div>'
+      +(sekTxt?'<div style="color:#888;font-size:12px;">'+sekTxt+'</div>':'')
+      +'<button onclick="openGeotechPanel()" style="margin-top:8px;background:#0f3460;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;">\ud83d\udcc4 Geo profily / dokumentace</button>'
+      +'</div>');
+    m.addTo(sondyLayer);
+  });
+}
+function setSondyVisible(on){
+  if(!sondyLayer) buildSondy();
+  var cb=document.getElementById('lyr-sondy'); if(cb) cb.checked=!!on;
+  if(on) sondyLayer.addTo(map);
+  else if(map.hasLayer(sondyLayer)) map.removeLayer(sondyLayer);
+}
+
 function buildDoplnky() {
   doplnkyLayer = L.layerGroup().addTo(map);
   layerGroups.doplnky = doplnkyLayer;
