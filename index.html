@@ -486,6 +486,7 @@ textarea.note-field { min-height:80px; resize:vertical; }
 .doplnek-pin.cat-400 { background: #f97316; }                   /* oranžová - VO */
 .doplnek-pin.cat-500 { background: #ef4444; }                   /* červená - plynovod */
 .doplnek-pin.cat-100 { background: #22c55e; }                   /* zelená - přeložky/přístupy komunikací */
+.doplnek-pin.cat-200 { background: #6366f1; }                   /* indigo - mosty (nadjezdy/podjezdy) */
 .doplnek-pin.cat-muk { background: #8b5cf6; }                   /* fialová - MÚK */
 .doplnek-pin.cat-tunel { background: #1a1a2e; color:#fff; border:1px solid #8b5cf6; }
 
@@ -1108,6 +1109,7 @@ document.addEventListener('touchend', function(e){
   <button id="btn-standalone-foto" onclick="takeStandalonePhoto()" title="Vyfotit" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📷</button>
   <button id="btn-gallery" onclick="openGallery()" title="Fotogalerie" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🖼️</button>
   <button id="btn-notes-evidence" onclick="openNotesEvidence()" title="Evidence poznámek" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📝</button>
+  <button id="btn-geo" onclick="openGeotechPanel()" title="Geotechnický monitoring – zprávy, profily, pasporty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🪨</button>
   <button id="btn-reset-view" onclick="resetMapView()" title="Reset pohledu" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">⌂</button>
   <div id="user-badge" onclick="showUserMenu()" title="Uživatel"><img id="user-photo" src="" alt=""><span id="user-name">…</span></div>
   <button id="btn-layers" onclick="toggleLayers()">☰ Vrstvy</button>
@@ -1189,7 +1191,7 @@ document.addEventListener('touchend', function(e){
     <label class="toggle"><input type="checkbox" id="lyr-prop" checked onchange="toggleLayer('propustky',this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <div class="layer-row">
-    <label>🧩 Doplňkové SO (000/300/400/500)</label>
+    <label>🧩 Doplňkové SO + mosty (000/200/300/400/500)</label>
     <label class="toggle"><input type="checkbox" id="lyr-doplnky" checked onchange="toggleLayer('doplnky',this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <div class="layer-row">
@@ -1458,6 +1460,28 @@ var DOPLNKY_SO = [
     {typ:'✂️ Příčné řezy', nazev:'Příčné řezy SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_05_PR.pdf'},
     {typ:'🔵 Propustek', nazev:'Propustek SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_06_PROP.pdf'},
     {typ:'✅ Kontrolní body', nazev:'Kontrolní body SO 124.1', soubor:PDF_BASE+'SO_124.1/124.1_07_KB.pdf'},
+  ]},
+  {id:'SO 226', kat:'200', badge:'226', km:132.150, kmShift:0, perpOffset:45, nazev:'SO 226 Nadjezd na přeložce III/30015 přes D11 (km 132,15)', vykresy:[
+    {typ:'📄 TZ', nazev:'Technická zpráva SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_01_TechZprava.pdf'},
+    {typ:'📄 Seznam příloh', nazev:'Seznam příloh SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_00_SeznamPriloh.pdf'},
+    {typ:'📐 Situace', nazev:'Situace SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_02_Situace.pdf'},
+    {typ:'📐 Půdorys', nazev:'Půdorys SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_03_Pudorys.pdf'},
+    {typ:'📈 Podélný řez', nazev:'Podélný řez SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_04_PodRez.pdf'},
+    {typ:'✂️ Vzorový řez', nazev:'Vzorový příčný řez SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_05_VzorPricRez.pdf'},
+    {typ:'✂️ Příčné řezy', nazev:'Příčné řezy O1+O2 SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_06_PricRezy_O1-O2.pdf'},
+    {typ:'🧱 Tvar O1', nazev:'Tvar opěry O1 SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_08.1_Tvar_O1.pdf'},
+    {typ:'🧱 Tvar O2', nazev:'Tvar opěry O2 SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_08.2_Tvar_O2.pdf'},
+    {typ:'🧱 Tvar desky', nazev:'Tvar desky SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_12_Tvar_Desky.pdf'},
+    {typ:'🧱 NK – tvar', nazev:'Nosná konstrukce – tvar SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_11.1_NK_Tvar.pdf'},
+    {typ:'📋 NK – výkaz mat.', nazev:'Nosná konstrukce – výkaz materiálu SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_11.2_NK_VykazMat.pdf'},
+    {typ:'🔩 Výztuž', nazev:'Výztuž SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_09_Vyztuz.pdf'},
+    {typ:'🛣️ Přechod. oblasti', nazev:'Přechodové oblasti SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_10_PrechObl.pdf'},
+    {typ:'🔧 Tech. výstroj', nazev:'Technologická výstroj SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_07_TechVyst.pdf'},
+    {typ:'🚧 Římsy/svodidla', nazev:'Římsy, svodidla, zábradlí SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_13_Rimsy_Svo_Zab.pdf'},
+    {typ:'💧 Odvodnění', nazev:'Odvodnění SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_14_Odvodneni.pdf'},
+    {typ:'🛠️ Úpravy', nazev:'Úpravy pod mostem SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_15_Upravy.pdf'},
+    {typ:'📍 Vytyčovací', nazev:'Vytyčovací výkres SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_16_VytycVykres.pdf'},
+    {typ:'📄 TZ (DI 134)', nazev:'Technická zpráva SO 226 (DI 134)', soubor:PDF_BASE+'SO_226/D_1_02_226_01_TechZprava_DI_134.pdf'},
   ]},
 ];
 
@@ -1904,6 +1928,80 @@ function openDocPanel(pages, realKm, startIdx) {
 
   // Malé zpoždění aby se about:blank stihl nastavit
   setTimeout(function(){ renderDocPage(realKm); }, 50);
+}
+
+// ══════════════════ GEOTECHNICKÝ MONITORING ══════════════════
+// Kurátorovaný výběr geotech PDF (úsek km 129,3–133,0) v pdf/geotechnika/.
+// Panel 🪨 s hledáním → klik na dokument → otevře se ve stávajícím PDF prohlížeči.
+var GEO_SECTIONS = [
+  {key:'zpravy',   title:'📑 Souhrnné geotech. zprávy a profily'},
+  {key:'pasporty', title:'🏗️ Pasporty objektů v úseku'}
+];
+var GEOTECH = {
+  zpravy: [
+    {s:"pdf/geotechnika/zpravy/A_Tech_pruv_zprava_1108.pdf", n:"Tech. průvodní zpráva 1108"},
+    {s:"pdf/geotechnika/zpravy/Priloha1PrehsitD1108.pdf", n:"Přehledná situace"},
+    {s:"pdf/geotechnika/zpravy/A.3.1.pdf", n:"Podélný geo profil — A.3.1"},
+    {s:"pdf/geotechnika/zpravy/A.3.2.pdf", n:"Podélný geo profil — A.3.2"},
+    {s:"pdf/geotechnika/zpravy/A.3.3.pdf", n:"Podélný geo profil — A.3.3"},
+    {s:"pdf/geotechnika/zpravy/A.3.4.pdf", n:"Podélný geo profil — A.3.4"},
+    {s:"pdf/geotechnika/zpravy/A.3.5.pdf", n:"Podélný geo profil — A.3.5"},
+    {s:"pdf/geotechnika/zpravy/A.3.6.pdf", n:"Podélný geo profil — A.3.6"},
+    {s:"pdf/geotechnika/zpravy/A.3.7.pdf", n:"Podélný geo profil — A.3.7"},
+    {s:"pdf/geotechnika/zpravy/Priloha_6.1_Staticke_penetrace.pdf", n:"Polní zkoušky — 6.1 Statické penetrace"},
+    {s:"pdf/geotechnika/zpravy/Priloha_6.2_Dynamicke_penetrace.pdf", n:"Polní zkoušky — 6.2 Dynamické penetrace"},
+    {s:"pdf/geotechnika/zpravy/D11_1108_ZZ_Koroze_.pdf", n:"Korozní průzkum"},
+    {s:"pdf/geotechnika/zpravy/Priloha_9_Hydrogeologicky_pruzkum.pdf", n:"Hydrogeologický průzkum"},
+    {s:"pdf/geotechnika/zpravy/Priloha_11_Geodeticka_zprava.pdf", n:"Geodetická zpráva"},
+    {s:"pdf/geotechnika/zpravy/_TZ_D11_Jaromer-Trutnov_AZC.pdf", n:"TZ vrtných prací"},
+    {s:"pdf/geotechnika/zpravy/tab_DEF_D11_Jaromer_Trutnov_AZC.pdf", n:"TZ vrtných prací — tab. DEF"}
+  ],
+  pasporty: [
+    {s:"pdf/geotechnika/pasporty/C24_SO226.pdf", n:"Pasport SO 226 (most)"},
+    {s:"pdf/geotechnika/pasporty/C24.1_Situace.pdf", n:"Pasport SO 226 — Situace"},
+    {s:"pdf/geotechnika/pasporty/C24.2.pdf", n:"Pasport SO 226 — řezy/profil"},
+    {s:"pdf/geotechnika/pasporty/E09_124.pdf", n:"Pasport SO 124"},
+    {s:"pdf/geotechnika/pasporty/E09.1_SO_124.pdf", n:"Pasport SO 124 — situace"},
+    {s:"pdf/geotechnika/pasporty/E09.2.pdf", n:"Pasport SO 124 — profil"},
+    {s:"pdf/geotechnika/pasporty/E10_125.pdf", n:"Pasport SO 125"},
+    {s:"pdf/geotechnika/pasporty/E10.1_SO_125.pdf", n:"Pasport SO 125 — situace"},
+    {s:"pdf/geotechnika/pasporty/E10.2.pdf", n:"Pasport SO 125 — profil"},
+    {s:"pdf/geotechnika/pasporty/E13_135.pdf", n:"Pasport SO 135"},
+    {s:"pdf/geotechnika/pasporty/E13.1_SO_135.pdf", n:"Pasport SO 135 — situace"},
+    {s:"pdf/geotechnika/pasporty/E13.2.1.pdf", n:"Pasport SO 135 — profil 1"},
+    {s:"pdf/geotechnika/pasporty/E13.2.2.pdf", n:"Pasport SO 135 — profil 2"}
+  ]
+};
+function openGeotechPanel(){
+  var p=document.getElementById('geo-panel'); if(!p) return;
+  p.style.display='flex';
+  var s=document.getElementById('geo-search');
+  renderGeotech(s ? s.value : '');
+}
+function closeGeotechPanel(){ var p=document.getElementById('geo-panel'); if(p) p.style.display='none'; }
+function renderGeotech(filter){
+  var box=document.getElementById('geo-list'); if(!box || typeof GEOTECH==='undefined') return;
+  var q=(filter||'').trim().toLowerCase();
+  var html=''; var total=0;
+  GEO_SECTIONS.forEach(function(sec){
+    var items=(GEOTECH[sec.key]||[]).filter(function(it){ return !q || it.n.toLowerCase().indexOf(q)>=0; });
+    if(!items.length) return;
+    total+=items.length;
+    html+='<div style="margin:12px 0 5px;font-weight:800;font-size:14px;color:var(--accent);">'+sec.title+' <span style="color:var(--text2);font-weight:400;">('+items.length+')</span></div>';
+    html+='<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+    items.forEach(function(it){
+      html+='<button onclick="openGeoDoc(this.dataset.s,this.dataset.n)" data-s="'+it.s+'" data-n="'+it.n.replace(/"/g,'&quot;')+'" '
+        +'style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 11px;font-size:13px;cursor:pointer;text-align:left;">📄 '+escapeHtml(it.n)+'</button>';
+    });
+    html+='</div>';
+  });
+  if(!total) html='<div style="padding:24px 8px;color:var(--text2);">Nic nenalezeno.</div>';
+  box.innerHTML=html;
+}
+// Otevře geotechnické PDF ve stávajícím prohlížeči výkresů (panel geotechniky se schová pod ním).
+function openGeoDoc(s,n){
+  closeGeotechPanel();
+  openDocPanel([{soubor:s, nazev:n, typ:'🪨 Geotechnika'}], null, 0);
 }
 
 var currentPdfSrc = '';
@@ -8895,6 +8993,18 @@ function copyDiaryExport(){
 <!-- Sync indikátor -->
 <div id="sync-indicator">⏳ Ukládám...</div>
 <div id="upload-badge"></div>
+
+<!-- Geotechnický monitoring – panel s hledáním -->
+<div id="geo-panel" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:3600;background:var(--bg);display:none;flex-direction:column;">
+  <div style="display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--border);">
+    <button onclick="closeGeotechPanel()" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:15px;cursor:pointer;">‹ Zpět</button>
+    <h2 style="margin:0;font-size:17px;flex:1;">🪨 Geotechnický monitoring</h2>
+  </div>
+  <div style="padding:8px 10px;border-bottom:1px solid var(--border);">
+    <input id="geo-search" type="search" placeholder="Hledat dokument (např. situace, koroze, SO 226)…" oninput="renderGeotech(this.value)" style="width:100%;box-sizing:border-box;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:15px;">
+  </div>
+  <div id="geo-list" style="flex:1;overflow:auto;padding:6px 10px 30px;"></div>
+</div>
 
 
 <!-- Editace poznámky -->
