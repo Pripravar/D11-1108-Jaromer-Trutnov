@@ -2010,6 +2010,24 @@ function isMobile() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
 }
 
+// ── Velmi husté výkresy (dekomprimovaný obsah >100 MB – gabiony, sparořezy,
+//    hydrogeologie) vestavěný pdf.js na telefonu nevykreslí a spadne (OOM).
+//    Na mobilu je proto rovnou nabídneme otevřít v nativním prohlížeči (↗),
+//    kde se zobrazí v pohodě. Velikost SOUBORU s tím nesouvisí (jsou jen ~2 MB).
+var VELKE_VYKRESY = [
+  "pdf/SO_135/135_06_Gabionove zdi-1-Vpravo.pdf",
+  "pdf/SO_135/135_06_Gabionove zdi-2-Vlevo.pdf",
+  "pdf/SO_135/135_07_Sparorez-1-Vpravo.pdf",
+  "pdf/SO_135/135_07_Sparorez-2-Vlevo.pdf",
+  "pdf/geotechnika/zpravy/Priloha_9_Hydrogeologicky_pruzkum.pdf"
+];
+var _velkeSet = null;
+function jeVelkyVykres(soubor){
+  if(!soubor) return false;
+  if(!_velkeSet){ _velkeSet = {}; VELKE_VYKRESY.forEach(function(p){ _velkeSet[p]=1; }); }
+  return !!_velkeSet[String(soubor).replace(/^\.?\//,'')];
+}
+
 // Na mobilu (zvlášť iOS PWA) iframe nedostane nativní PDF prohlížeč.
 // Použijeme proto hostovaný Mozilla PDF.js viewer, který má vlastní toolbar
 // (strany, lupa, kreslicí nástroje, vyhledávání) a uvnitř funguje pinch-zoom.
@@ -2076,12 +2094,36 @@ function renderDocPage(realKm) {
   var zoomIn  = document.getElementById('btn-pdf-zoom-in');
   var zoomOut = document.getElementById('btn-pdf-zoom-out');
   if(canvasWrap) canvasWrap.style.display = 'none';
-  if(openWrap)   openWrap.style.display   = 'none';
-  if(frameWrap)  frameWrap.style.display  = 'flex';
-  var frame = document.getElementById('pdf-frame');
-  if(frame) frame.src = pdfFrameSrcFor(p.soubor);
   if(zoomIn)  zoomIn.style.display  = 'none';
   if(zoomOut) zoomOut.style.display = 'none';
+  var frame = document.getElementById('pdf-frame');
+  // Velmi hustý výkres na mobilu → nepouštět do iframu (spadlo by), nabídnout nativní prohlížeč
+  if(isMobile() && jeVelkyVykres(p.soubor)) {
+    if(frame) { frame.src = 'about:blank'; }
+    if(frameWrap) frameWrap.style.display = 'none';
+    if(openWrap) {
+      openWrap.style.display = 'flex';
+      var lbl = document.getElementById('pdf-open-label');
+      if(lbl) lbl.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
+        '<br><span style="font-size:11px;">Vestavěný náhled by na telefonu spadl – otevři ho v prohlížeči.</span>' +
+        '<br><a onclick="docForceIframe()" style="color:var(--accent2);cursor:pointer;text-decoration:underline;font-size:12px;">přesto zkusit zobrazit zde</a>';
+    }
+  } else {
+    if(openWrap)  openWrap.style.display  = 'none';
+    if(frameWrap) frameWrap.style.display = 'flex';
+    if(frame) frame.src = pdfFrameSrcFor(p.soubor);
+  }
+}
+
+// "Přesto zkusit zobrazit zde" u velkého výkresu v hlavním PDF panelu.
+function docForceIframe(){
+  var p = docPages[docPageIdx]; if(!p) return;
+  var frame = document.getElementById('pdf-frame');
+  var openWrap = document.getElementById('pdf-open-btn-wrap');
+  var frameWrap = document.getElementById('pdf-frame-wrap');
+  if(openWrap) openWrap.style.display = 'none';
+  if(frameWrap) frameWrap.style.display = 'flex';
+  if(frame) frame.src = pdfFrameSrcFor(p.soubor);
 }
 
 // Zoom úroveň pro PDF.js canvas. 1.0 = fit-to-width, 1.25, 1.5, 2.0, …
@@ -4391,13 +4433,34 @@ function renderPropPage(idx) {
   var propZoomIn  = document.getElementById('btn-prop-zoom-in');
   var propZoomOut = document.getElementById('btn-prop-zoom-out');
   if(canvasWrap) canvasWrap.style.display = 'none';
-  if(openWrap)   openWrap.style.display   = 'none';
-  if(frameEl)    { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
   if(propZoomIn)  propZoomIn.style.display  = 'none';
   if(propZoomOut) propZoomOut.style.display = 'none';
+  // Velmi hustý výkres na mobilu → nepouštět do iframu (spadlo by), nabídnout nativní prohlížeč
+  if(isMobile() && jeVelkyVykres(p.soubor)) {
+    if(frameEl) { frameEl.src = 'about:blank'; frameEl.style.display = 'none'; }
+    if(openWrap) {
+      openWrap.style.display = 'flex';
+      var lbl = document.getElementById('prop-open-label');
+      if(lbl) lbl.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
+        '<br><span style="font-size:11px;">Vestavěný náhled by na telefonu spadl – otevři ho v prohlížeči.</span>' +
+        '<br><a onclick="propForceIframe()" style="color:var(--accent2);cursor:pointer;text-decoration:underline;font-size:12px;">přesto zkusit zobrazit zde</a>';
+    }
+  } else {
+    if(openWrap) openWrap.style.display = 'none';
+    if(frameEl)  { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
+  }
   // Koš jen u nahraného výkresu, který patří přihlášenému uživateli
   var delBtn = document.getElementById('btn-prop-del-vykres');
   if(delBtn) delBtn.style.display = (p._uploaded && isOwner(p, 'uid')) ? '' : 'none';
+}
+
+// "Přesto zkusit zobrazit zde" u velkého výkresu – natvrdo nahraje iframe (na vlastní riziko).
+function propForceIframe(){
+  var p = propPages[propPageIdx]; if(!p) return;
+  var frameEl = document.getElementById('prop-iframe');
+  var openWrap = document.getElementById('prop-open-wrap');
+  if(openWrap) openWrap.style.display = 'none';
+  if(frameEl) { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
 }
 
 // ── Nahrání PDF výkresu k aktuálnímu SO objektu ──────────
@@ -4547,6 +4610,8 @@ function renderPropPdfOnCanvas(pdfUrl) {
 
 function openPropPdfExternal() {
   if(!currentPropSrc) return;
+  // Velký/hustý výkres má prázdný iframe (nerenderuje se) → vždy otevřít v prohlížeči
+  if(jeVelkyVykres(currentPropSrc)) { window.open(currentPropSrc, '_blank'); return; }
   // V PWA na iOS: fullscreen interního panelu místo Safari (kvůli návratu zpět)
   if(isPWA() && isIOS()) {
     var panel = document.getElementById('prop-panel');
