@@ -5070,7 +5070,7 @@ function updatePrikopLabel(id, stav) {
 
 var galleryTab = 0;
 var galleryGrouped = false;   // false = klasická mřížka, true = složky po stavebních objektech
-var gallerySort = 'date';     // 'date' = datum pořízení (nejnovější první), 'km' = staničení (vzestupně)
+var gallerySort = 'date_desc';   // date_desc/date_asc/km_asc/km_desc/so
 
 // ── Stavební objekty (složky pro fotky) ──────────────────────────
 // Liniové objekty mají rozsah km (kmOd–kmDo, odvozeno z výkresů situací/profilů),
@@ -5599,26 +5599,89 @@ function renderGallery() {
 // Řadí se vyfiltrované pole, takže stejné pořadí platí i ve složkách (Po objektech).
 function sortGalleryItems(items) {
   var arr = items.slice();
-  if(gallerySort === 'km') {
-    arr.sort(function(a, b) {
-      var ka = parseKmStr(a.km), kb = parseKmStr(b.km);
-      if(ka === null && kb === null) return 0;
-      if(ka === null) return 1;   // bez staničení až za fotky s km
-      if(kb === null) return -1;
-      return ka - kb;
+  var mode = gallerySort || 'date_desc';
+  function kmOf(it){ var k = parseKmStr(it.km); return k === null ? Infinity : k; }
+  function dateOf(it){ return photoCreationDate(it).getTime(); }
+  if(mode === 'km_asc' || mode === 'km_desc'){
+    var dir = (mode === 'km_desc') ? -1 : 1;
+    arr.sort(function(a, b){
+      var ka = kmOf(a), kb = kmOf(b);
+      if(ka !== kb){
+        if(ka === Infinity) return 1;   // bez km vždy na konec
+        if(kb === Infinity) return -1;
+        return (ka - kb) * dir;
+      }
+      return dateOf(b) - dateOf(a);
     });
-  } else {
-    arr.sort(function(a, b) {
-      return photoCreationDate(b).getTime() - photoCreationDate(a).getTime();
+  } else if(mode === 'so'){
+    arr.sort(function(a, b){
+      var sa = a.so || '￿', sb = b.so || '￿';  // Nezařazené na konec
+      var c = sa.localeCompare(sb, 'cs', {numeric:true});
+      if(c) return c;
+      return (kmOf(a) - kmOf(b)) || (dateOf(b) - dateOf(a));
     });
+  } else if(mode === 'date_asc'){
+    arr.sort(function(a, b){ return dateOf(a) - dateOf(b); });
+  } else { // date_desc (výchozí)
+    arr.sort(function(a, b){ return dateOf(b) - dateOf(a); });
   }
   return arr;
 }
 
-// Změna řazení galerie ze selectu v liště filtru.
+// Změna řazení galerie ze selectu v liště filtru. Režimy:
+// date_desc, date_asc, km_asc, km_desc, so
 function setGallerySort(mode) {
-  gallerySort = (mode === 'km') ? 'km' : 'date';
+  gallerySort = mode || 'date_desc';
   renderGallery();
+}
+
+// ── Jednorázová migrace: dogenerovat náhledy starým fotkám (bez thumb) ──
+// Nové fotky náhled dostanou rovnou při nahrávání. Tohle zrychlí galerii i pro
+// fotky pořízené dříve. Běží na pozadí, sekvenčně (kvůli GitHub commitům).
+var _thumbMigRunning = false;
+function _thumbMigBadge(cur, total){
+  var el = document.getElementById('thumb-mig-badge');
+  if(!el){
+    el = document.createElement('div'); el.id = 'thumb-mig-badge';
+    el.style.cssText = 'position:fixed;top:96px;left:50%;transform:translateX(-50%);z-index:4000;background:rgba(0,0,0,.8);color:#fff;font-size:12px;font-weight:600;padding:6px 14px;border-radius:16px;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+    document.body.appendChild(el);
+  }
+  if(total > 0 && cur <= total){ el.style.display = 'block'; el.textContent = '🖼️ Generuji náhledy: ' + cur + '/' + total; }
+  else el.style.display = 'none';
+}
+function generateMissingThumbs(){
+  if(_thumbMigRunning){ showToast('Náhledy se už generují…', 2000); return; }
+  if(!window.currentUser){ showToast('Pro generování náhledů se přihlas', 3000); return; }
+  showToast('Hledám fotky bez náhledu…', 1500);
+  db.ref('standalone_photos').once('value').then(function(snap){
+    var v = snap.val() || {};
+    var todo = Object.keys(v).filter(function(k){ var r = v[k]; return r && r.url && !r.thumb; });
+    if(!todo.length){ showToast('✅ Všechny fotky už mají náhled', 2500); return; }
+    if(!confirm('Vygenerovat náhledy pro ' + todo.length + ' fotek?\nPoběží na pozadí, galerii pak můžeš dál používat.')) return;
+    _thumbMigRunning = true;
+    var done = 0, fail = 0;
+    function next(i){
+      if(i >= todo.length){
+        _thumbMigRunning = false; _thumbMigBadge(0, 0);
+        showToast('✅ Náhledy hotové (' + done + '/' + todo.length + (fail ? ', ' + fail + ' selhalo' : '') + ')', 4500);
+        renderGallery();
+        return;
+      }
+      var key = todo[i], r = v[key];
+      _thumbMigBadge(i + 1, todo.length);
+      fetch(r.url).then(function(rsp){ return rsp.blob(); }).then(blobToDataUrl).then(function(dataUrl){
+        makeThumb(dataUrl, function(thumbUrl){
+          if(!thumbUrl){ fail++; setTimeout(function(){ next(i + 1); }, 150); return; }
+          var t = r.ts || (i + 1);
+          uploadPhotoToGitHubP(thumbUrl, 'standalone/foto_' + t + '_t.jpg').then(function(urlT){
+            if(urlT){ db.ref('standalone_photos/' + key + '/thumb').set(urlT); done++; } else fail++;
+            setTimeout(function(){ next(i + 1); }, 350);
+          });
+        }, 400, 0.5);
+      }).catch(function(){ fail++; setTimeout(function(){ next(i + 1); }, 250); });
+    }
+    next(0);
+  }).catch(function(){ showToast('Nepodařilo se načíst fotky', 3000); });
 }
 
 // Přepínač klasická mřížka ↔ složky po stavebních objektech.
@@ -9173,8 +9236,11 @@ function copyDiaryExport(){
       <div style="flex:1;">
         <div style="font-size:10px;color:var(--text2);text-transform:uppercase;margin-bottom:2px;">↕️ Řadit podle</div>
         <select id="gallery-sort-sel" onchange="setGallerySort(this.value)" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:13px;">
-          <option value="date">📅 Datum pořízení (nejnovější první)</option>
-          <option value="km">📏 Staničení (od začátku stavby)</option>
+          <option value="date_desc">📅 Datum – nejnovější první</option>
+          <option value="date_asc">📅 Datum – nejstarší první</option>
+          <option value="km_asc">📏 Staničení – od začátku stavby</option>
+          <option value="km_desc">📏 Staničení – od konce stavby</option>
+          <option value="so">🏗️ Podle objektu (SO)</option>
         </select>
       </div>
     </div>
@@ -9206,6 +9272,7 @@ function copyDiaryExport(){
         </select>
       </div>
       <button onclick="clearGalleryFilters()" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:6px 10px;font-size:12px;cursor:pointer;">⌫ Vynulovat</button>
+      <button onclick="generateMissingThumbs()" title="Dogeneruje malé náhledy starým fotkám → galerie se načítá rychleji" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:6px 10px;font-size:12px;cursor:pointer;">🖼️ Zrychlit galerii</button>
     </div>
   </div>
   <div id="gallery-body">
