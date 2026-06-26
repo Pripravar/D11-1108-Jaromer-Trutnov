@@ -113,6 +113,20 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #btn-add { position:fixed; bottom:84px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--accent); border:2px solid var(--accent); color:#fff; font-size:26px; line-height:1; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.45); transition:all .2s; }
 #btn-add:active { transform:scale(.92); }
 
+/* Měření vzdálenosti / plochy na mapě */
+#btn-measure{position:fixed;bottom:24px;left:16px;width:48px;height:48px;border-radius:50%;background:var(--panel2);border:2px solid var(--border);color:var(--text);font-size:20px;cursor:pointer;z-index:1500;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.4);}
+#measure-cross{display:none;position:fixed;z-index:1200;width:0;height:0;pointer-events:none;}
+#measure-cross.open{display:block;}
+#measure-cross::before,#measure-cross::after{content:'';position:absolute;background:#16a34a;box-shadow:0 0 2px rgba(255,255,255,.95);}
+#measure-cross::before{width:2px;height:34px;left:-1px;top:-17px;}
+#measure-cross::after{width:34px;height:2px;left:-17px;top:-1px;}
+#measure-hud{display:none;position:fixed;left:8px;right:8px;bottom:8px;z-index:4500;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px 10px;box-shadow:0 4px 16px rgba(0,0,0,.4);flex-direction:column;gap:8px;}
+#measure-hud.open{display:flex;}
+#measure-readout{font-size:14px;color:var(--text);}
+#measure-hud .mrow{display:flex;flex-wrap:wrap;gap:6px;}
+#measure-hud button{flex:1;min-width:84px;min-height:44px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);font-size:14px;cursor:pointer;}
+#measure-hud button.mprimary{background:var(--accent);color:#fff;border:none;}
+
 /* Křížek uprostřed mapy v režimu umístění */
 #place-cross { display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1600; pointer-events:none; }
 #place-cross::before, #place-cross::after { content:''; position:absolute; background:var(--accent); box-shadow:0 0 0 1px rgba(255,255,255,.85); }
@@ -1206,6 +1220,10 @@ document.addEventListener('touchend', function(e){
     <label>🛢️ Vrtné sondy (geotechnika)</label>
     <label class="toggle"><input type="checkbox" id="lyr-sondy" onchange="setSondyVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row">
+    <label>📏 Měření (tým)</label>
+    <label class="toggle"><input type="checkbox" id="lyr-mereni" checked onchange="setMereniVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
     <label>🏷️ Razítko (km, datum, jméno)</label>
@@ -1215,6 +1233,24 @@ document.addEventListener('touchend', function(e){
 
 <button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
 <button id="btn-add" onclick="openAddChooser()" title="Přidat poznámku nebo úkol">➕</button>
+<button id="btn-measure" onclick="toggleMeasure()" title="Měřit délku / plochu na mapě">📏</button>
+<div id="measure-cross"></div>
+<div id="measure-hud">
+  <div class="mrow" style="margin-bottom:4px;">
+    <button id="mkind-delka" onclick="setMeasureKind('delka')">📏 Vzdálenost</button>
+    <button id="mkind-plocha" onclick="setMeasureKind('plocha')">⬛ Plocha</button>
+  </div>
+  <div id="measure-readout">0 bodů</div>
+  <div class="mrow">
+    <button class="mprimary" onclick="measureAddPoint()">➕ Bod</button>
+    <button onclick="measureUndo()">↩️ Zpět</button>
+    <button onclick="measureClear()">🗑️ Vyčistit</button>
+  </div>
+  <div class="mrow">
+    <button id="measure-save-btn" onclick="measureSave()">💾 Uložit</button>
+    <button onclick="stopMeasure()">✖ Konec</button>
+  </div>
+</div>
 
 <!-- Křížek + banner pro umístění poznámky/úkolu -->
 <div id="place-cross"><div class="ring"></div></div>
@@ -1512,7 +1548,7 @@ var gpsActive = false;
 var gpsCentering = false;
 var gpxCumulative = [];
 var calibSorted = null;
-var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, sondy:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null};
+var layerGroups = {trasa:null, st100:null, st20:null, pr:null, propustky:null, prikopy:null, etapy:null, etapa1:null, etapa2:null, etapa3:null, etapa4:null, so:null, so101_1:null, so101_2:null, so101_3:null, sanace:null, sondy:null, mereni:null, notes:null, notes0:null, notes1:null, notes2:null, notes3:null, notes4:null, notes5:null, notes6:null};
 
 // ── MATH ──────────────────────────────
 function haversine(lat1,lon1,lat2,lon2) {
@@ -2461,6 +2497,8 @@ function init() {
   map.fitBounds(L.latLngBounds(GPX_POINTS.map(function(p){return[p[0],p[1]];})),{padding:[40,40]});
   startGPS();
   loadNotes();
+  _loadVykRevize();   // revize/zneplatnění výkresů (verzování)
+  loadMereni();       // týmová měření (délka/plocha)
   initLongPress();
   // Zastavit touch eventy z panelů aby nešly do Leaflet mapy
   ['pdf-panel','prop-panel'].forEach(function(id) {
@@ -4315,6 +4353,172 @@ function buildPrikopy() {
   drawSide(CISTENI_PRIKOPY.vlevo,  'vlevo');
 }
 
+// ══════════════════ MĚŘENÍ VZDÁLENOSTI / PLOCHY NA MAPĚ ══════════════════
+// Křížek uprostřed mapy + tlačítko „➕ Bod". Délka = haversine součet spojnic;
+// plocha bez knihovny (ekvirektangulární projekce + shoelace, chyba <0,1 %).
+// Uložení po týmu do /mereni (vrstva). Mazat smí jen autor (isOwner).
+var measureMode = false;
+var measureKind = 'delka';   // 'delka' (spojnice/obvod) | 'plocha' (uzavřený obrazec)
+var measurePts = [];
+var measureLayer = null;
+var _measureMoveH = null;
+function _positionMeasureCross(){
+  var mapEl=document.getElementById('map'), ch=document.getElementById('measure-cross');
+  if(!mapEl||!ch) return;
+  var r=mapEl.getBoundingClientRect();
+  ch.style.left=(r.left+r.width/2)+'px'; ch.style.top=(r.top+r.height/2)+'px';
+}
+function fmtLen(m){
+  if(m>=1000) return (m/1000).toFixed(3).replace('.',',')+' km';
+  return (m<10? m.toFixed(2): m.toFixed(1)).replace('.',',')+' m';
+}
+function fmtArea(a){
+  if(a>=10000) return (a/10000).toFixed(3).replace('.',',')+' ha';
+  if(a>=100)   return Math.round(a)+' m² ('+(a/100).toFixed(2).replace('.',',')+' a)';
+  return a.toFixed(1).replace('.',',')+' m²';
+}
+function polygonAreaM2(pts){
+  if(pts.length<3) return 0;
+  var R=6371000, lat0=pts.reduce(function(s,p){return s+p[0];},0)/pts.length, cl=Math.cos(lat0*Math.PI/180);
+  var xy=pts.map(function(p){return [R*(p[1]-pts[0][1])*Math.PI/180*cl, R*(p[0]-pts[0][0])*Math.PI/180];});
+  var a=0; for(var i=0;i<xy.length;i++){var j=(i+1)%xy.length; a+=xy[i][0]*xy[j][1]-xy[j][0]*xy[i][1];}
+  return Math.abs(a)/2;
+}
+function measureLengthM(pts){
+  var d=0; for(var i=1;i<pts.length;i++) d+=haversine(pts[i-1][0],pts[i-1][1],pts[i][0],pts[i][1]);
+  return d;
+}
+function startMeasure(){
+  if(!map) return;
+  try{ if(typeof placeCancel==='function') placeCancel(); }catch(e){}
+  measureMode=true; measurePts=[];
+  if(!measureLayer) measureLayer=L.layerGroup().addTo(map); else measureLayer.addTo(map);
+  document.getElementById('measure-cross').classList.add('open');
+  document.getElementById('measure-hud').classList.add('open');
+  _positionMeasureCross();
+  _measureMoveH=function(){ _positionMeasureCross(); };
+  window.addEventListener('resize', _measureMoveH);
+  var ba=document.getElementById('btn-add'); if(ba) ba.style.display='none';
+  var bm=document.getElementById('btn-measure'); if(bm){ bm.style.background='var(--accent)'; bm.style.color='#fff'; }
+  setMeasureKind(measureKind);
+}
+function setMeasureKind(k){
+  measureKind = (k==='plocha') ? 'plocha' : 'delka';
+  var bd=document.getElementById('mkind-delka'), bp=document.getElementById('mkind-plocha');
+  if(bd&&bp){
+    var on='flex:1;min-height:44px;border-radius:8px;border:none;font-size:14px;cursor:pointer;background:var(--accent);color:#fff;';
+    var off='flex:1;min-height:44px;border-radius:8px;border:1px solid var(--border);font-size:14px;cursor:pointer;background:var(--panel2);color:var(--text);';
+    bd.style.cssText=(measureKind==='delka'?on:off); bp.style.cssText=(measureKind==='plocha'?on:off);
+  }
+  measureRedraw(); updateMeasureHud();
+}
+function stopMeasure(){
+  measureMode=false;
+  var c=document.getElementById('measure-cross'); if(c) c.classList.remove('open');
+  var h=document.getElementById('measure-hud'); if(h) h.classList.remove('open');
+  if(_measureMoveH){ window.removeEventListener('resize',_measureMoveH); _measureMoveH=null; }
+  if(measureLayer) measureLayer.clearLayers();
+  measurePts=[];
+  var ba=document.getElementById('btn-add'); if(ba) ba.style.display='';
+  var bm=document.getElementById('btn-measure'); if(bm){ bm.style.background='var(--panel2)'; bm.style.color='var(--text)'; }
+}
+function toggleMeasure(){ measureMode ? stopMeasure() : startMeasure(); }
+function measureAddPoint(){
+  if(!measureMode||!map) return;
+  var c=map.getCenter(); measurePts.push([c.lat,c.lng]);
+  if(navigator.vibrate) navigator.vibrate(30);
+  measureRedraw(); updateMeasureHud();
+}
+function measureUndo(){ if(measurePts.length){ measurePts.pop(); measureRedraw(); updateMeasureHud(); } }
+function measureClear(){ measurePts=[]; measureRedraw(); updateMeasureHud(); }
+function measureRedraw(){
+  if(!measureLayer) return; measureLayer.clearLayers();
+  if(measureKind==='plocha' && measurePts.length>=3) L.polygon(measurePts,{color:'#16a34a',weight:2,fillColor:'#16a34a',fillOpacity:0.18,interactive:false}).addTo(measureLayer);
+  if(measurePts.length>=2) L.polyline(measurePts,{color:'#16a34a',weight:3,interactive:false}).addTo(measureLayer);
+  measurePts.forEach(function(p){
+    L.marker(p,{interactive:false, icon:L.divIcon({className:'',iconSize:[0,0],
+      html:'<div style="position:absolute;transform:translate(-50%,-50%);width:8px;height:8px;border-radius:50%;background:#16a34a;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.5);"></div>'})}).addTo(measureLayer);
+  });
+}
+function updateMeasureHud(){
+  var el=document.getElementById('measure-readout'); if(!el) return;
+  var len=measureLengthM(measurePts);
+  var html='<b>'+measurePts.length+'</b> bodů';
+  if(measureKind==='plocha'){
+    if(measurePts.length>=3){
+      var perim=len + haversine(measurePts[measurePts.length-1][0],measurePts[measurePts.length-1][1],measurePts[0][0],measurePts[0][1]);
+      html+=' · plocha <b>'+fmtArea(polygonAreaM2(measurePts))+'</b> · obvod <b>'+fmtLen(perim)+'</b>';
+    } else if(measurePts.length>=1){ html+=' · obrazec potřebuje ≥3 body'; }
+  } else {
+    if(measurePts.length>=2) html+=' · délka <b>'+fmtLen(len)+'</b>';
+  }
+  el.innerHTML=html;
+}
+function measureSave(){
+  if(measurePts.length<2){ showToast('Změř aspoň 2 body', 2000); return; }
+  if(typeof db==='undefined'||!db){ showToast('Ukládání nedostupné', 2000); return; }
+  if(!window.currentUser){ showToast('Pro uložení se přihlas', 2500); return; }
+  var nazev=prompt('Název měření (povinný):',''); if(nazev===null) return;
+  nazev=(nazev||'').trim(); if(!nazev){ showToast('Název je povinný', 2000); return; }
+  var popis=(prompt('Popis (nepovinný):','')||'').trim();
+  var isPlocha=(measureKind==='plocha' && measurePts.length>=3);
+  var rec={ nazev:nazev, popis:popis, typ:(isPlocha?'plocha':'delka'),
+    body:measurePts.map(function(p){return {lat:p[0],lng:p[1]};}),
+    delkaM:Math.round(measureLengthM(measurePts)),
+    plochaM2:(isPlocha?Math.round(polygonAreaM2(measurePts)):0),
+    uid:(window.currentUser?window.currentUser.uid:''),
+    author:(window.currentUser?window.currentUser.name:''), ts:Date.now() };
+  db.ref('mereni').push(rec).then(function(){ showToast('💾 Měření uloženo', 2000); stopMeasure(); })
+    .catch(function(){ showToast('❌ Uložení selhalo (pravidla / přihlášení?)', 3500); });
+}
+// Uložená týmová měření – vrstva 'mereni' (defaultně zapnutá)
+var mereniLayer=null; window.mereniData={};
+function loadMereni(){
+  if(typeof db==='undefined'||!db) return;
+  if(!mereniLayer){
+    mereniLayer=L.layerGroup(); layerGroups.mereni=mereniLayer;
+    var cb=document.getElementById('lyr-mereni');
+    if(!cb || cb.checked) mereniLayer.addTo(map);
+  }
+  db.ref('mereni').on('value', function(snap){
+    window.mereniData=snap.val()||{}; renderMereni();
+  }, function(){});
+}
+function renderMereni(){
+  if(!mereniLayer) return; mereniLayer.clearLayers();
+  var d=window.mereniData||{};
+  Object.keys(d).forEach(function(key){
+    var r=d[key]; if(!r||!r.body||r.body.length<2) return;
+    var pts=r.body.map(function(b){return [b.lat,b.lng];});
+    var col='#e67e22';
+    if(r.typ==='plocha' && pts.length>=3) L.polygon(pts,{color:col,weight:2,fillColor:col,fillOpacity:0.15}).addTo(mereniLayer);
+    var line=L.polyline(pts,{color:col,weight:3}).addTo(mereniLayer);
+    var val=(r.typ==='plocha')?fmtArea(r.plochaM2):fmtLen(r.delkaM);
+    var canDel=(typeof isOwner==='function')?isOwner(r,'uid'):true;
+    var delBtn=canDel?'<br><button onclick="deleteMereni(\''+key+'\')" style="margin-top:6px;background:#ff6b6b;color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;">🗑️ Smazat</button>':'';
+    line.bindPopup('<div style="font-size:13px;min-width:150px;"><b>'+(r.typ==='plocha'?'📐 ':'📏 ')+escapeHtml(r.nazev||'Měření')+'</b><br>'+
+      (r.typ==='plocha'?'plocha ':'délka ')+'<b>'+val+'</b>'+
+      (r.popis?'<br>'+escapeHtml(r.popis):'')+
+      (r.author?'<br><span style="color:#888;font-size:12px;">'+escapeHtml(r.author)+'</span>':'')+delBtn+'</div>');
+    var mid=pts[Math.floor(pts.length/2)];
+    L.marker(mid,{interactive:true, icon:L.divIcon({className:'',iconSize:[0,0],
+      html:'<div style="position:absolute;transform:translate(-50%,-50%);background:'+col+';color:#fff;font-size:11px;font-weight:700;padding:1px 5px;border-radius:6px;border:1.5px solid #fff;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.5);">'+val+'</div>'})}).addTo(mereniLayer);
+  });
+}
+function deleteMereni(key){
+  var r=(window.mereniData||{})[key];
+  if(r && typeof isOwner==='function' && !isOwner(r,'uid')){ showToast('🔒 Smazat může jen autor měření', 2800); return; }
+  if(!confirm('Smazat toto měření?')) return;
+  db.ref('mereni/'+key).remove().then(function(){ showToast('🗑️ Smazáno', 1500); }).catch(function(){ showToast('❌ Chyba mazání', 2500); });
+}
+function setMereniVisible(on){
+  if(!mereniLayer){ loadMereni(); }
+  var cb=document.getElementById('lyr-mereni'); if(cb) cb.checked=!!on;
+  if(!mereniLayer) return;
+  if(on) mereniLayer.addTo(map);
+  else if(map.hasLayer(mereniLayer)) map.removeLayer(mereniLayer);
+}
+
 // DOPLŇKOVÉ SO - vykresluje markery s barvou dle kategorie (000/300/400/500)
 var doplnkyLayer = null;
 // ── VRTNÉ SONDY – body na mapě (vrstva defaultně VYPNUTÁ) ─────────────
@@ -4539,18 +4743,68 @@ function openPropPanel(prop) {
   loadUploadedVykresy(prop);
 }
 
-// Sestaví záložky z aktuálního pole propPages (zachová vybraný index)
+// Sestaví záložky z aktuálního pole propPages. Neplatné (zneplatněné) výkresy
+// se přeřadí na KONEC a vykreslí šedě/kurzívou jako „⛔" – pořád otevřitelné.
 function _buildPropTabs() {
   var tabs = document.getElementById('prop-tabs');
   if(!tabs) return;
+  // označ neplatné a stabilně přeřaď: platné napřed, neplatné na konec
+  propPages.forEach(function(p){ p._invalid = jeNeplatnyVykres(p.soubor); });
+  var cur = propPages[propPageIdx];
+  var valid = propPages.filter(function(p){ return !p._invalid; });
+  var invalid = propPages.filter(function(p){ return p._invalid; });
+  propPages = valid.concat(invalid);
+  var ni = propPages.indexOf(cur);
+  propPageIdx = (ni >= 0) ? ni : 0;
   tabs.innerHTML = '';
   propPages.forEach(function(p, i) {
     var btn = document.createElement('button');
     btn.className = 'pdf-tab' + (i===propPageIdx?' active':'');
-    btn.textContent = (p._uploaded ? '🆕 ' : '') + (p.typ || 'Výkres');
+    if(p._invalid){
+      btn.textContent = '⛔ ' + (p.typ || 'Výkres');
+      btn.style.opacity = '.55'; btn.style.fontStyle = 'italic';
+    } else {
+      btn.textContent = (p._uploaded ? '🆕 ' : '') + (p.typ || 'Výkres');
+    }
     btn.onclick = (function(idx){ return function(){ renderPropPage(idx); }; })(i);
     tabs.appendChild(btn);
   });
+}
+
+// ── Verzování / zneplatňování výkresů ────────────────────────────────
+// Příznak v DB (NE mazání) → soubor v repu zůstává archiv. Klíč = cesta souboru.
+// Záznam NEMÁ pole 'uid' → podle pravidla vykresy/$so/$id smí vytvořit/upravit/smazat
+// kterýkoliv přihlášený (zneplatnit i obnovit může kdokoliv z týmu). Bez změny pravidel.
+var _vykRevize = {};
+function _revKey(soubor){ return String(soubor || '').replace(/[^A-Za-z0-9]/g, '_'); }
+function jeNeplatnyVykres(soubor){ return !!(soubor && _vykRevize[_revKey(soubor)]); }
+function _loadVykRevize(){
+  if(typeof db === 'undefined') return;
+  db.ref('vykresy/_revize').on('value', function(snap){
+    _vykRevize = {};
+    var v = snap.val() || {};
+    Object.keys(v).forEach(function(k){ if(v[k] && v[k].neplatny) _vykRevize[k] = v[k]; });
+    var pp = document.getElementById('prop-panel');
+    if(pp && pp.classList.contains('open')){ _buildPropTabs(); renderPropPage(propPageIdx); }
+  });
+}
+function invalidateCurrentDoc(){
+  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
+  var p = propPages[propPageIdx]; if(!p || !p.soubor) return;
+  if(!confirm('Označit výkres „' + (p.nazev || p.typ || '') + '" jako NEPLATNÝ (nahrazený)?\nZůstane dohledatelný jako šedá záložka na konci.')) return;
+  db.ref('vykresy/_revize/' + _revKey(p.soubor)).set({
+    neplatny: true, soubor: p.soubor,
+    by: (window.currentUser.name || ''), byUid: (window.currentUser.uid || ''),
+    ts: Date.now()
+  }).then(function(){ showToast('🗄️ Označeno jako neplatné', 1800); })
+    .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 2800); });
+}
+function restoreCurrentDoc(){
+  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
+  var p = propPages[propPageIdx]; if(!p || !p.soubor) return;
+  db.ref('vykresy/_revize/' + _revKey(p.soubor)).remove()
+    .then(function(){ showToast('♻️ Obnoveno jako platné', 1800); })
+    .catch(function(){ showToast('❌ Nepodařilo se', 2800); });
 }
 
 // Klíč složky/uzlu pro daný SO objekt (např. "SO 124.1" → "SO_124.1")
@@ -4619,6 +4873,12 @@ function renderPropPage(idx) {
   // Koš jen u nahraného výkresu, který patří přihlášenému uživateli
   var delBtn = document.getElementById('btn-prop-del-vykres');
   if(delBtn) delBtn.style.display = (p._uploaded && isOwner(p, 'uid')) ? '' : 'none';
+  // Zneplatnit / obnovit – pro libovolný výkres (statický i nahraný), jen přihlášený
+  var logged = !!window.currentUser;
+  var invBtn = document.getElementById('btn-prop-invalidate');
+  var resBtn = document.getElementById('btn-prop-restore');
+  if(invBtn) invBtn.style.display = (logged && !p._invalid) ? '' : 'none';
+  if(resBtn) resBtn.style.display = (logged && p._invalid) ? '' : 'none';
 }
 
 // "Přesto zkusit zobrazit zde" u velkého výkresu – natvrdo nahraje iframe (na vlastní riziko).
@@ -9348,6 +9608,8 @@ function copyDiaryExport(){
     <button onclick="if(currentPropSrc)window.open(currentPropSrc,'_blank')" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
     <button id="btn-prop-add-vykres" onclick="addVykresForCurrentSO()" title="Přidat PDF výkres k tomuto objektu" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px 6px;font-weight:700;">➕📄</button>
     <button id="btn-prop-del-vykres" onclick="deleteCurrentVykres()" title="Smazat nahraný výkres" style="display:none;background:none;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:4px 6px;">🗑</button>
+    <button id="btn-prop-invalidate" onclick="invalidateCurrentDoc()" title="Označit výkres jako neplatný (nahrazený)" style="display:none;background:none;border:none;color:var(--text2);font-size:15px;cursor:pointer;padding:4px 6px;">🗄️</button>
+    <button id="btn-prop-restore" onclick="restoreCurrentDoc()" title="Obnovit výkres jako platný" style="display:none;background:none;border:none;color:#48bb78;font-size:15px;cursor:pointer;padding:4px 6px;">♻️</button>
     <button id="btn-prop-fs" onclick="togglePropFs()">⛶</button>
     <button id="btn-prop-close" onclick="closePropPanel()">✕</button>
   </div>

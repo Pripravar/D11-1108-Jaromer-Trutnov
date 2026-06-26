@@ -261,3 +261,31 @@ exports.uploadVykres = functions
       res.status(500).json({ error: 'Chyba serveru při uploadu' });
     }
   });
+
+/* ════════════════════════════════════════════════════════════════
+   NAPLÁNOVANÁ FUNKCE – denní záloha celé Realtime Database do Storage
+   - Jednou denně uloží celý strom DB jako JSON do PRIVÁTNÍHO Firebase Storage
+     (zalohy/db-<den>.json + zalohy/db-latest.json).
+   - Kryje textová data (deník, poznámky, úkoly, KZP, podpisy, metadata fotek).
+     Samotné soubory fotek/PDF kryje GitHub repo (git historie).
+   - Bez GITHUB_TOKENu, jen admin SDK. NIKDY nezálohovat DB do veřejného repa.
+
+   PŘED DEPLOYEM (uživatel): Firebase Console → Build → Storage → Get started
+     (vytvoří default bucket; bez něj funkce spadne na chybějícím bucketu).
+   DEPLOY (uživatel): firebase deploy --only functions:backupDatabase
+     (1. deploy naplánované funkce zapne Cloud Scheduler API + Pub/Sub API.)
+   ════════════════════════════════════════════════════════════════ */
+exports.backupDatabase = functions
+  .region('europe-west1')
+  .pubsub.schedule('every 24 hours').timeZone('Europe/Prague')
+  .onRun(async () => {
+    const data = (await admin.database().ref('/').once('value')).val() || {};
+    const json = JSON.stringify(data);
+    const stamp = new Date().toISOString().slice(0, 10);
+    const bucket = admin.storage().bucket();
+    const opts = { contentType: 'application/json', resumable: false };
+    await bucket.file('zalohy/db-' + stamp + '.json').save(json, opts);
+    await bucket.file('zalohy/db-latest.json').save(json, opts);
+    console.log('Záloha DB uložena: zalohy/db-' + stamp + '.json');
+    return null;
+  });
