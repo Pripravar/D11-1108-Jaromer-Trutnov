@@ -6250,17 +6250,47 @@ function completeLogin(user, nameOverride) {
     photo:    window.currentUser.photo,
     lastSeen: Date.now()
   });
-  // Blokace: zablokovaný účet nevpustit do aplikace
-  db.ref('uzivatele/' + user.uid + '/blocked').once('value').then(function(s){
-    if(s.val() === true){
+  // Načíst profil → blokace (ven) + schválení (čekárna, dokud admin neschválí)
+  db.ref('uzivatele/' + user.uid).once('value').then(function(s){
+    var u = s.val() || {};
+    if(u.blocked === true){
       window.currentUser = null;
       document.getElementById('auth-gate').classList.remove('hide');
       showAuthError('⛔ Tvůj účet zablokoval administrátor. Obrať se na koordinátora.');
       try{ fbAuth.signOut(); }catch(e){}
       return;
     }
+    if(u.approved !== true && !isAdmin(user.uid)){
+      _showPendingApproval(user.uid, displayName);
+      return;
+    }
     _enterApp(displayName);
-  }).catch(function(){ _enterApp(displayName); });  // fail-open, blokaci živě dořeší loadAllUsers
+  }).catch(function(){ _enterApp(displayName); });  // fail-open, blokaci/schválení živě dořeší loadAllUsers
+}
+
+// Čekárna na schválení admina – přihlášený zůstává, ale nevpuštěn; živě čeká na approved.
+function _showPendingApproval(uid, name){
+  var gate = document.getElementById('auth-gate'); if(gate) gate.classList.remove('hide');
+  ['main','phone','code','name'].forEach(function(v){ var el=document.getElementById('auth-view-'+v); if(el) el.style.display='none'; });
+  showAuthError('');
+  var pend = document.getElementById('auth-view-pending');
+  if(!pend){
+    pend = document.createElement('div'); pend.id = 'auth-view-pending';
+    (document.querySelector('#auth-gate .auth-box') || gate).appendChild(pend);
+  }
+  pend.style.display = 'block';
+  pend.innerHTML = '<div style="text-align:center;color:#fff;padding:6px;">'+
+    '<div style="font-size:44px;margin-bottom:8px;">⏳</div>'+
+    '<div style="font-size:17px;font-weight:800;margin-bottom:6px;">Čekáš na schválení</div>'+
+    '<div style="font-size:13px;color:#cbd5e0;line-height:1.5;">Přihlášen jako <b>'+escapeHtml(name)+'</b>.<br>Koordinátor tě musí schválit – pak se aplikace otevře sama.</div>'+
+    '<button onclick="signOutUser()" style="margin-top:16px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:10px 20px;font-size:14px;cursor:pointer;">Odhlásit</button></div>';
+  db.ref('uzivatele/' + uid + '/approved').on('value', function(s){
+    if(s.val() === true){
+      db.ref('uzivatele/' + uid + '/approved').off();
+      pend.style.display = 'none';
+      _enterApp(name);
+    }
+  });
 }
 
 // Vpuštění do aplikace (až po ověření, že není zablokovaný)
@@ -6496,6 +6526,16 @@ function isBlocked(uid){
   var u = uid || (window.currentUser && window.currentUser.uid);
   return !!(u && window.allUsers[u] && window.allUsers[u].blocked);
 }
+function isApproved(uid){
+  var u = uid || (window.currentUser && window.currentUser.uid);
+  if(isAdmin(u)) return true;
+  return !!(u && window.allUsers[u] && window.allUsers[u].approved === true);
+}
+function toggleUserApprove(uid, approve){
+  db.ref('uzivatele/' + uid + '/approved').set(approve ? true : null)
+    .then(function(){ showToast(approve ? '✅ Schváleno' : 'Schválení zrušeno', 1800); })
+    .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
+}
 var FEATURES = [
   {key:'foto',       label:'Focení',                  btns:['btn-standalone-foto']},
   {key:'galerie',    label:'Galerie fotek',           btns:['btn-gallery']},
@@ -6546,21 +6586,31 @@ function renderUserAdmin(){
   var users = Object.keys(window.allUsers || {}).map(function(uid){
     var u = window.allUsers[uid] || {}; u._uid = uid; return u;
   }).filter(function(u){ return u.name || u.email; });
-  users.sort(function(a,b){ return (b.lastSeen||0) - (a.lastSeen||0); });
+  users.sort(function(a,b){
+    var pa = (!isAdmin(a._uid) && a.approved !== true) ? 0 : 1;   // čekající nahoru
+    var pb = (!isAdmin(b._uid) && b.approved !== true) ? 0 : 1;
+    if(pa !== pb) return pa - pb;
+    return (b.lastSeen||0) - (a.lastSeen||0);
+  });
   var meUid = window.currentUser && window.currentUser.uid;
   var html = '';
   users.forEach(function(u){
     var uid = u._uid, self = (uid === meUid), adm = isAdmin(uid), blk = !!u.blocked;
-    html += '<div style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;background:var(--panel2);">';
+    var pend = !adm && u.approved !== true;
+    html += '<div style="border:1px solid ' + (pend?'#f6ad55':'var(--border)') + ';border-radius:10px;padding:10px;margin-bottom:8px;background:' + (pend?'rgba(246,173,85,0.10)':'var(--panel2)') + ';">';
     html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
     html += '<b style="font-size:14px;">' + escapeHtml(u.name || '(bez jména)') + '</b>';
     if(adm) html += '<span style="background:#6366f1;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;">ADMIN</span>';
     if(blk) html += '<span style="background:#ff6b6b;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;">BLOKOVÁN</span>';
+    if(pend) html += '<span style="background:#f6ad55;color:#1a1a2e;font-size:10px;font-weight:800;padding:1px 6px;border-radius:8px;">⏳ ČEKÁ</span>';
     html += '<span style="margin-left:auto;font-size:11px;color:' + (_relTime(u.lastSeen)==='● online'?'#48bb78':'var(--text2)') + ';">' + _relTime(u.lastSeen) + '</span>';
     html += '</div>';
     if(u.email) html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">' + escapeHtml(u.email) + '</div>';
     if(!self){
       html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
+      if(!adm){
+        html += '<button onclick="toggleUserApprove(\'' + uid + '\',' + (u.approved===true?'false':'true') + ')" style="background:' + (u.approved===true?'var(--panel)':'#48bb78') + ';color:' + (u.approved===true?'var(--text2)':'#fff') + ';border:' + (u.approved===true?'1px solid var(--border)':'none') + ';border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:700;">' + (u.approved===true?'↩ Zrušit schválení':'✅ Schválit') + '</button>';
+      }
       html += '<button onclick="uaBlock(\'' + uid + '\',' + (blk?'false':'true') + ')" style="background:' + (blk?'#48bb78':'#ff6b6b') + ';color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;">' + (blk?'✅ Odblokovat':'🚫 Zablokovat') + '</button>';
       html += '<button onclick="uaAdmin(\'' + uid + '\',' + (adm?'false':'true') + ')" style="background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;">' + (adm?'⭐ Odebrat admina':'⭐ Udělat adminem') + '</button>';
       html += '</div>';
