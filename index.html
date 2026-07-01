@@ -1282,7 +1282,7 @@ document.addEventListener('touchend', function(e){
     <button id="btn-pdf-next" onclick="docNav(1)">&#8250;</button>
     <button id="btn-pdf-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-pdf-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
-    <button onclick="if(currentPdfSrc)window.open(currentPdfSrc,'_blank')" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
+    <button onclick="openFileExternal(currentPdfSrc)" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
     <button id="btn-pdf-fs" onclick="togglePdfFs()">⛶</button>
     <button id="btn-pdf-close" onclick="closePdf()">✕</button>
   </div>
@@ -1791,7 +1791,7 @@ function openPRPanel(realKm, pr) {
   if(openWrap) openWrap.style.display='none';
   if(frameWrap) frameWrap.style.display='flex';
   var frame = document.getElementById('pdf-frame');
-  if(frame) frame.src = pdfFrameSrcFor(pr.soubor);
+  if(frame) setPdfFrameAsync(frame, pr.soubor);
 }
 
 // Azimut úseku mezi dvěma body (stupně, 0=N, 90=E)
@@ -2146,6 +2146,43 @@ function jeVelkyVykres(soubor){
 // Na mobilu (zvlášť iOS PWA) iframe nedostane nativní PDF prohlížeč.
 // Použijeme proto hostovaný Mozilla PDF.js viewer, který má vlastní toolbar
 // (strany, lupa, kreslicí nástroje, vyhledávání) a uvnitř funguje pinch-zoom.
+// ── Servírování PDF ze Storage (jen pro přihlášené) s dual-read fallbackem ──
+// V DB/kódu se drží CESTY (pdf/…). resolveFileUrl je přeloží na Storage token-URL
+// (getDownloadURL, cache). Když soubor na Storage NENÍ (nebo chyba), spadne zpět na
+// relativní GitHub cestu → nic se během migrace nerozbije a po smazání z GitHubu jede Storage.
+var _fileUrlCache = {};
+function resolveFileUrl(path){
+  if(!path) return Promise.resolve('about:blank');
+  if(/^(https?:|data:|blob:|about:)/i.test(path)) return Promise.resolve(path);
+  if(_fileUrlCache[path]) return Promise.resolve(_fileUrlCache[path]);
+  if(!storage) return Promise.resolve(path);
+  return storage.ref(path).getDownloadURL()
+    .then(function(u){ _fileUrlCache[path] = u; return u; })
+    .catch(function(){ return path; });   // dual-read: fallback na starou cestu
+}
+// Zabalí absolutní URL do prohlížeče (na mobilu pdf.js viewer kvůli toolbaru/pinch-zoom).
+function pdfViewerUrl(absUrl){
+  if(!absUrl || absUrl === 'about:blank') return 'about:blank';
+  var abs = /^https?:/i.test(absUrl) ? absUrl : new URL(absUrl, window.location.href).href;
+  if(!isMobile()) return abs;
+  return 'https://mozilla.github.io/pdf.js/web/viewer.html?file=' + encodeURIComponent(abs);
+}
+// Asynchronně nastaví iframe.src z cesty (přes Storage resolver).
+function setPdfFrameAsync(frameEl, path){
+  if(!frameEl) return;
+  frameEl.src = 'about:blank';
+  resolveFileUrl(path).then(function(u){ frameEl.src = pdfViewerUrl(u); });
+}
+// Otevře PDF externě (nové okno). Okno otevři HNED v gestu (jinak popup-blocker), pak nastav URL.
+function openFileExternal(path){
+  if(!path) return;
+  var w = window.open('', '_blank');
+  resolveFileUrl(path).then(function(u){
+    var abs = /^https?:/i.test(u) ? u : new URL(u, window.location.href).href;
+    if(w && !w.closed) w.location.href = abs; else window.open(abs, '_blank');
+  });
+}
+// Sync fallback (ponecháno kvůli případným starým voláním; reálně se používá async cesta).
 function pdfFrameSrcFor(src) {
   if(!src) return 'about:blank';
   if(!isMobile()) return src;
@@ -2168,7 +2205,7 @@ function openPdfExternal() {
   // Vždy otevřít externě v Safari - tam dostane plný PDF prohlížeč
   // s toolbarem, pinch-zoom a navigací mezi stranami.
   // (V PWA módu na iOS jiný způsob neexistuje, iframe je vykreslen bez toolbarů.)
-  window.open(currentPdfSrc, '_blank');
+  openFileExternal(currentPdfSrc);
 }
 
 function renderDocPage(realKm) {
@@ -2226,7 +2263,7 @@ function renderDocPage(realKm) {
   } else {
     if(openWrap)  openWrap.style.display  = 'none';
     if(frameWrap) frameWrap.style.display = 'flex';
-    if(frame) frame.src = pdfFrameSrcFor(p.soubor);
+    if(frame) setPdfFrameAsync(frame, p.soubor);
   }
 }
 
@@ -2238,7 +2275,7 @@ function docForceIframe(){
   var frameWrap = document.getElementById('pdf-frame-wrap');
   if(openWrap) openWrap.style.display = 'none';
   if(frameWrap) frameWrap.style.display = 'flex';
-  if(frame) frame.src = pdfFrameSrcFor(p.soubor);
+  if(frame) setPdfFrameAsync(frame, p.soubor);
 }
 
 // Zoom úroveň pro PDF.js canvas. 1.0 = fit-to-width, 1.25, 1.5, 2.0, …
@@ -4944,7 +4981,7 @@ function renderPropPage(idx) {
     }
   } else {
     if(openWrap) openWrap.style.display = 'none';
-    if(frameEl)  { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
+    if(frameEl)  { frameEl.style.display = 'flex'; setPdfFrameAsync(frameEl, p.soubor); }
   }
   // Koš jen u nahraného výkresu, který patří přihlášenému uživateli
   var delBtn = document.getElementById('btn-prop-del-vykres');
@@ -4963,7 +5000,7 @@ function propForceIframe(){
   var frameEl = document.getElementById('prop-iframe');
   var openWrap = document.getElementById('prop-open-wrap');
   if(openWrap) openWrap.style.display = 'none';
-  if(frameEl) { frameEl.style.display = 'flex'; frameEl.src = pdfFrameSrcFor(p.soubor); }
+  if(frameEl) { frameEl.style.display = 'flex'; setPdfFrameAsync(frameEl, p.soubor); }
 }
 
 // ── Nahrání PDF výkresu k aktuálnímu SO objektu ──────────
@@ -4982,8 +5019,8 @@ function addVykresForCurrentSO() {
     if(!file) return;
     var nm = (file.name || '').toLowerCase();
     if(nm.slice(-4) !== '.pdf') { showToast('Vyber soubor PDF', 2500); return; }
-    if(file.size > 7.5 * 1024 * 1024) {
-      showToast('❌ PDF je moc velké (max ~7 MB). Zmenši ho nebo rozděl.', 4000); return;
+    if(file.size > 30 * 1024 * 1024) {
+      showToast('❌ PDF je moc velké (max 30 MB). Zmenši ho nebo rozděl.', 4000); return;
     }
     var nazev = prompt('Název výkresu (jak se zobrazí):', file.name.replace(/\.pdf$/i, ''));
     if(nazev === null) return;
@@ -5001,42 +5038,29 @@ function _doUploadVykres(prop, file, nazev) {
     if(!base64) { showToast('❌ Nepodařilo se načíst soubor', 3000); return; }
     var ts = Date.now();
     var safe = nazev.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/_+/g, '_').slice(0, 60) || 'vykres';
-    var filename = soKey + '/' + ts + '_' + safe + '.pdf';   // commit → pdf/uploads/<filename>
-    var user = fbAuth.currentUser;
+    var path = 'pdf/uploads/' + soKey + '/' + ts + '_' + safe + '.pdf';   // → Firebase Storage
     showSync('⏳ Nahrávám výkres…');
-    user.getIdToken().then(function(idToken){
-      return fetch(UPLOAD_VYKRES_FN_URL, {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: filename, content: base64 })
-      });
-    })
-    .then(function(r){ return r.json().then(function(d){ return { ok:r.ok, data:d }; }); })
-    .then(function(res){
-      if(!res.ok || !res.data || !res.data.download_url) {
-        var msg = (res.data && res.data.error) ? res.data.error : 'neznámá chyba';
-        hideSync(); showToast('❌ Upload: ' + msg, 4500); return;
-      }
-      // Zápis do registru výkresů (servírujeme přes GitHub Pages = application/pdf)
-      var entry = {
-        nazev: nazev,
-        soubor: 'pdf/uploads/' + filename,
-        uid: (window.currentUser ? window.currentUser.uid : null),
-        author: (window.currentUser ? window.currentUser.name : ''),
-        time: new Date().toLocaleString('cs-CZ'),
-        ts: ts
-      };
-      db.ref('vykresy/' + soKey).push(entry).then(function(){
+    if(!storage){ hideSync(); showToast('❌ Storage nedostupné', 3000); return; }
+    storage.ref(path).putString(base64, 'base64', { contentType: 'application/pdf' })
+      .then(function(){
+        var entry = {
+          nazev: nazev, soubor: path,
+          uid: (window.currentUser ? window.currentUser.uid : null),
+          author: (window.currentUser ? window.currentUser.name : ''),
+          time: new Date().toLocaleString('cs-CZ'), ts: ts
+        };
+        return db.ref('vykresy/' + soKey).push(entry);
+      })
+      .then(function(){
         hideSync();
-        showToast('✅ Výkres nahrán. Zobrazí se do 1–2 min (publikace).', 4500);
+        showToast('✅ Výkres nahrán', 3000);
         if(window._currentProp && window._currentProp.id === prop.id) loadUploadedVykresy(prop);
-      }).catch(function(err){
+      })
+      .catch(function(err){
         hideSync();
-        console.error('Zápis vykresu selhal:', err);
-        showToast('❌ Soubor nahrán, ale zápis do DB selhal (pravidla?)', 4500);
+        console.error('uploadVykres storage:', err);
+        showToast('❌ Nahrání výkresu selhalo (pravidla?)', 4500);
       });
-    })
-    .catch(function(e){ hideSync(); console.error('uploadVykres exc:', e); showToast('❌ Síťová chyba uploadu', 3500); });
   };
   reader.readAsDataURL(file);
 }
@@ -5115,14 +5139,14 @@ function renderPropPdfOnCanvas(pdfUrl) {
 function openPropPdfExternal() {
   if(!currentPropSrc) return;
   // Velký/hustý výkres má prázdný iframe (nerenderuje se) → vždy otevřít v prohlížeči
-  if(jeVelkyVykres(currentPropSrc)) { window.open(currentPropSrc, '_blank'); return; }
+  if(jeVelkyVykres(currentPropSrc)) { openFileExternal(currentPropSrc); return; }
   // V PWA na iOS: fullscreen interního panelu místo Safari (kvůli návratu zpět)
   if(isPWA() && isIOS()) {
     var panel = document.getElementById('prop-panel');
     if(panel) panel.classList.add('fullscreen');
     return;
   }
-  window.open(currentPropSrc,'_blank');
+  openFileExternal(currentPropSrc);
 }
 
 
@@ -9409,7 +9433,7 @@ function openKzpPdfInline(k){
   }
   if(pdfView) pdfView.style.display = 'flex';
   if(frame && typeof pdfFrameSrcFor === 'function') {
-    frame.src = pdfFrameSrcFor(k.pdfUrl);
+    setPdfFrameAsync(frame, k.pdfUrl);
   } else if(frame) {
     frame.src = k.pdfUrl;
   }
@@ -9908,7 +9932,7 @@ function copyDiaryExport(){
     <div id="prop-title">Propustek</div>
     <button id="btn-prop-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-prop-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
-    <button onclick="if(currentPropSrc)window.open(currentPropSrc,'_blank')" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
+    <button onclick="openFileExternal(currentPropSrc)" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
     <button id="btn-prop-add-vykres" onclick="addVykresForCurrentSO()" title="Přidat PDF výkres k tomuto objektu" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px 6px;font-weight:700;">➕📄</button>
     <button id="btn-prop-del-vykres" onclick="deleteCurrentVykres()" title="Smazat nahraný výkres" style="display:none;background:none;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:4px 6px;">🗑</button>
     <button id="btn-prop-invalidate" onclick="invalidateCurrentDoc()" title="Označit výkres jako neplatný (nahrazený)" style="display:none;background:none;border:none;color:var(--text2);font-size:15px;cursor:pointer;padding:4px 6px;">🗄️</button>
