@@ -19,6 +19,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Plugin pro otáčení mapy dvěma prsty (touch rotate jako v Google Maps) -->
 <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js"></script>
@@ -1340,6 +1341,7 @@ var FIREBASE_VAPID_KEY = 'BIjBMdGC4qYAqdhKIsS-rID5X41eUlGrlWgqZxJpbmQWSOpDj-Nzma
 // Firebase inicializace
 firebase.initializeApp(FIREBASE_CONFIG);
 var db = firebase.database();
+var storage = (function(){ try { return firebase.storage(); } catch(e){ console.warn('Storage SDK nedostupné', e); return null; } })();
 var fbAuth = null;
 try {
   fbAuth = firebase.auth();
@@ -3139,29 +3141,36 @@ function burnInMetadata(dataUrl, km, author, callback) {
   img.src = dataUrl;
 }
 
+// Nahraje fotku do Firebase Storage (privátní EU bucket, čte jen přihlášený).
+// Vrací token-download-URL (funguje v <img> i pdf.js). Jedno místo → přepne
+// všechny cesty (standalone, poznámky, miniatury, migrace).
+// 'filename' = např. 'standalone/foto_<ts>_o.jpg' → uloží se do 'photos/<filename>'.
 function uploadPhotoToGitHub(dataUrl, filename, callback) {
   var base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
   var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
   if(!user) { showToast('❌ Nejsi přihlášen – foto se nenahrálo', 3000); callback(null); return; }
-  user.getIdToken().then(function(idToken){
-    return fetch(UPLOAD_FN_URL, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: filename, content: base64 })
-    });
-  })
-  .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
-  .then(function(res){
-    if(res.ok && res.data && res.data.download_url) {
-      callback(res.data.download_url);
-    } else {
-      console.error('Upload fn err:', JSON.stringify(res.data));
-      var msg = (res.data && res.data.error) ? res.data.error : 'neznámá chyba';
-      showToast('❌ Upload: ' + msg, 4000);
+  if(!storage) { showToast('❌ Storage není dostupné', 3000); callback(null); return; }
+  var ref = storage.ref('photos/' + filename);
+  ref.putString(base64, 'base64', { contentType: 'image/jpeg' })
+    .then(function(){ return ref.getDownloadURL(); })
+    .then(function(url){ callback(url); })
+    .catch(function(e){
+      console.error('Storage upload err:', e);
+      showToast('❌ Upload fotky selhal: ' + (e && e.code ? e.code : 'chyba'), 4000);
       callback(null);
-    }
-  })
-  .catch(function(e){ console.error('Upload fn exc:', e); showToast('❌ Síťová chyba uploadu', 3000); callback(null); });
+    });
+}
+
+// Best-effort smazání souborů fotky ze Storage (GDPR – ať „smazat" fakt odstraní soubor).
+function _purgePhotoStorage(item){
+  if(!storage || !item) return;
+  var urls = [item.url, item.urlOriginal, item.urlStamped, item.thumb];
+  var seen = {};
+  urls.forEach(function(u){
+    if(!u || typeof u !== 'string' || u.indexOf('http') !== 0 || seen[u]) return;
+    seen[u] = 1;
+    try { storage.refFromURL(u).delete().catch(function(){}); } catch(e){}
+  });
 }
 
 function uploadPhotosToGitHub(items, onProgress, onDone, meta) {
@@ -3861,7 +3870,9 @@ function deleteStandalonePhoto() {
   if(!_photoFsKey) return;
   if(!confirm('Smazat tuto fotku?')) return;
   var key = _photoFsKey;
+  var item = _photoFsItem;   // zachovat před closePhotoFs (nuluje _photoFsItem)
   closePhotoFs();
+  _purgePhotoStorage(item);  // GDPR: smazat i soubor ze Storage, ne jen DB odkaz
   db.ref('standalone_photos/' + key).remove()
     .then(function() {
       showToast('🗑️ Fotka smazána', 1500);
