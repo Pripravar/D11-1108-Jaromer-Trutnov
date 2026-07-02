@@ -741,8 +741,9 @@ textarea.note-field { min-height:80px; resize:vertical; }
 /* -- Standalone foto galerie ----------------------------- */
 #gallery-modal { position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:4800; display:none; flex-direction:column; }
 #gallery-modal.open { display:flex; }
-#gallery-header { background:var(--panel); padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top)); display:flex; align-items:center; gap:10px; flex-shrink:0; border-bottom:1px solid var(--border); }
-#gallery-header h3 { flex:1; font-size:15px; font-weight:700; color:var(--accent2); }
+#gallery-header { background:var(--panel); padding:12px 14px; padding-top:calc(12px + env(safe-area-inset-top)); display:flex; align-items:center; gap:10px; flex-shrink:0; border-bottom:1px solid var(--border); overflow-x:auto; -webkit-overflow-scrolling:touch; }
+#gallery-header h3 { flex:1 1 auto; min-width:80px; font-size:15px; font-weight:700; color:var(--accent2); }
+#gallery-header > button, #gallery-header > a { flex-shrink:0; }
 #gallery-close { background:none; border:none; color:var(--text2); font-size:22px; cursor:pointer; padding:4px 8px; }
 #gallery-tabs { display:flex; flex-shrink:0; background:var(--panel2); }
 .gallery-tab { flex:1; padding:10px; text-align:center; font-size:13px; font-weight:700; color:var(--text2); cursor:pointer; border-bottom:2px solid transparent; transition:all .2s; }
@@ -9903,11 +9904,6 @@ function copyDiaryExport(){
 <div id="gallery-modal">
   <div id="gallery-header">
     <h3>Fotogalerie <span id="gallery-count" style="color:var(--text2);font-size:11px;font-weight:400;margin-left:6px;"></span></h3>
-    <span style="display:inline-flex;align-items:center;gap:2px;margin-right:6px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px;">
-      <button onclick="stepGalleryCols(-1)" title="Větší náhledy (méně ve řadě)" style="background:none;border:none;color:var(--text);font-size:16px;font-weight:800;cursor:pointer;width:26px;height:26px;">−</button>
-      <span id="gallery-cols-val" style="font-size:11px;color:var(--text2);min-width:34px;text-align:center;">3 / řada</span>
-      <button onclick="stepGalleryCols(1)" title="Menší náhledy (více ve řadě)" style="background:none;border:none;color:var(--text);font-size:16px;font-weight:800;cursor:pointer;width:26px;height:26px;">+</button>
-    </span>
     <button id="gallery-group-btn" onclick="toggleGalleryGrouped()" title="Zobrazit po stavebních objektech" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">📁 Po objektech</button>
     <button id="gallery-select-btn" onclick="toggleGallerySelectMode()" title="Hromadný výběr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">☑️ Vybrat</button>
     <button onclick="toggleGalleryFilter()" title="Filtr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">🔍 Filtr</button>
@@ -9928,6 +9924,14 @@ function copyDiaryExport(){
           <option value="km_desc">📏 Staničení – od konce stavby</option>
           <option value="so">🏗️ Podle objektu (SO)</option>
         </select>
+      </div>
+      <div style="flex:0 0 auto;">
+        <div style="font-size:10px;color:var(--text2);text-transform:uppercase;margin-bottom:2px;">🔳 Velikost náhledů</div>
+        <div style="display:inline-flex;align-items:center;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px;">
+          <button onclick="stepGalleryCols(-1)" title="Větší náhledy" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">−</button>
+          <span id="gallery-cols-val" style="font-size:12px;color:var(--text2);min-width:46px;text-align:center;">3 / řada</span>
+          <button onclick="stepGalleryCols(1)" title="Menší náhledy (víc ve řadě)" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">+</button>
+        </div>
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
