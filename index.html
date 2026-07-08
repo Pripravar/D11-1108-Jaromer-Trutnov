@@ -2486,6 +2486,12 @@ function updateGPS(lat,lng) {
   var n=nearestOnRoute(lat,lng);
   document.getElementById('km-display').textContent='km '+fmtKm(gpxCumToRealKm(n.cum));
   if(gpsCentering) map.setView([lat,lng],map.getZoom());
+  // Geo připomínky – throttle na 1× za 60 s
+  var _nowg = Date.now();
+  if(!window._lastGeoRemind || _nowg - window._lastGeoRemind > 60000){
+    window._lastGeoRemind = _nowg;
+    try { _checkGeoReminders(); } catch(e){}
+  }
 }
 
 function centerGPS() {
@@ -7015,6 +7021,7 @@ function loadTasks() {
     renderTasksList();
     renderTasksOnMap();
     updateTaskBadge();
+    try { _checkGeoReminders(); } catch(e){}   // geo připomínky po načtení úkolů
     // Pokud je otevřený detail, refresh ho
     if(window.openTaskId) {
       var t = window.allTasks.filter(function(x){ return x.id === window.openTaskId; })[0];
@@ -7061,6 +7068,98 @@ function deleteTaskFromFirebase(taskId, cb) {
   });
 }
 
+// ── M: Připomínky u úkolu ───────────────────────────────────────────
+function _updateRemindUI(){
+  var typ = (document.getElementById('tnm-remind-typ')||{}).value || '';
+  var at = document.getElementById('tnm-remind-at');
+  var pred = document.getElementById('tnm-remind-pred');
+  var hint = document.getElementById('tnm-remind-hint');
+  if(at) at.style.display = (typ==='cas') ? 'block' : 'none';
+  if(pred) pred.style.display = (typ==='pred') ? 'block' : 'none';
+  if(hint){
+    var m = {
+      cas:  '⏰ Push přijde v zadaný čas (kontrola cca každých 15 min).',
+      pred: '⏳ Push přijde daný čas před termínem úkolu.',
+      geo:  '📍 Připomene se, když otevřeš appku v okolí stavby.',
+      '':   ''
+    };
+    hint.textContent = m[typ] || '';
+  }
+}
+// Sestaví objekt připomínky z formuláře (nebo null). deadline = 'YYYY-MM-DD' termín úkolu.
+function _buildPripominka(deadline){
+  var typ = (document.getElementById('tnm-remind-typ')||{}).value || '';
+  if(!typ) return null;
+  if(typ==='cas'){
+    var v = (document.getElementById('tnm-remind-at')||{}).value || '';
+    if(!v) return null;
+    var t = new Date(v).getTime();
+    if(isNaN(t)) return null;
+    return { typ:'cas', at:t, sent:false };
+  }
+  if(typ==='pred'){
+    var off = parseInt((document.getElementById('tnm-remind-pred')||{}).value,10) || 60;
+    var at2 = null;
+    if(deadline){ var d = new Date(deadline+'T23:59:00'); if(!isNaN(d)) at2 = d.getTime() - off*60000; }
+    return { typ:'pred', offsetMin:off, at:at2, sent:false };
+  }
+  if(typ==='geo'){ return { typ:'geo', notifiedTs:0 }; }
+  return null;
+}
+// Naplní formulář z uložené připomínky
+function _fillPripominka(p){
+  var selT = document.getElementById('tnm-remind-typ');
+  var at = document.getElementById('tnm-remind-at');
+  var pred = document.getElementById('tnm-remind-pred');
+  if(!selT) return;
+  if(!p || !p.typ){ selT.value=''; _updateRemindUI(); return; }
+  selT.value = p.typ;
+  if(p.typ==='cas' && p.at && at){
+    var d = new Date(p.at);
+    if(!isNaN(d)){
+      at.value = d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate())+'T'+pad2(d.getHours())+':'+pad2(d.getMinutes());
+    }
+  }
+  if(p.typ==='pred' && pred) pred.value = String(p.offsetMin||60);
+  _updateRemindUI();
+}
+// Klient-side kontrola geo připomínek: úkoly s pripominka.typ==='geo' u nichž jsem v okolí
+function _checkGeoReminders(){
+  if(!window.allTasks || !gpsActive || !gpsMarker) return;
+  var ll = gpsMarker.getLatLng();
+  var now = Date.now();
+  (window.allTasks||[]).forEach(function(t){
+    var p = t.pripominka; if(!p || p.typ!=='geo' || t.stav==='done') return;
+    if(t.lat==null || t.lng==null) return;
+    // jen úkoly které se mě týkají (zadal jsem / přiřazen)
+    var me = window.currentUser && window.currentUser.uid;
+    var mine = me && (t.zadalUid===me || (t.prirazeno||[]).some(function(a){return a.uid===me;}));
+    if(!mine) return;
+    var dist = _haversineM(ll.lat, ll.lng, t.lat, t.lng);
+    if(dist <= 400 && (now - (p.notifiedTs||0) > 6*3600*1000)){
+      showToast('📍 Připomínka: „' + (t.title||'úkol') + '" je poblíž', 5000);
+      db.ref('ukoly/'+t.id+'/pripominka/notifiedTs').set(now).catch(function(){});
+    }
+  });
+}
+function _haversineM(la1,lo1,la2,lo2){
+  var R=6371000, r=Math.PI/180;
+  var dLa=(la2-la1)*r, dLo=(lo2-lo1)*r;
+  var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLo/2)*Math.sin(dLo/2);
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(a)));
+}
+// Živý popisek pod výběrem priority – vysvětlí dopad na upozornění
+function _updatePrioHint(){
+  var sel = document.getElementById('tnm-priority');
+  var hint = document.getElementById('tnm-prio-hint');
+  if(!sel || !hint) return;
+  var m = {
+    nizka:   '🔕 Bez push – úkol se jen tiše přidá do seznamu.',
+    normalni:'🔔 Běžné upozornění přiřazeným.',
+    vysoka:  '🚨 Důrazné upozornění (zůstane na displeji dokud ho nezavřou).'
+  };
+  hint.textContent = m[sel.value] || '';
+}
 function sendTaskNotificationRequest(task, typ) {
   // Cloud Function (viz cloud-function/) sleduje uzel /notifikace_fronta
   // a pošle FCM zprávu příslušným uživatelům. Pokud Cloud Function neexistuje,
@@ -7071,6 +7170,7 @@ function sendTaskNotificationRequest(task, typ) {
     taskId:     task.id,
     typ:        typ, // 'novy' | 'hotovo' | 'komentar'
     title:      task.title || '',
+    priorita:   task.priorita || 'normalni', // řídí důraz upozornění (nizka=tiše, vysoka=důrazně)
     zadalUid:   task.zadalUid,
     zadalName:  task.zadalName,
     prirazeno:  task.prirazeno || [],
@@ -7227,6 +7327,8 @@ function openNewTaskModal(lat, lng, km) {
   document.getElementById('tnm-text-detail').value = '';
   document.getElementById('tnm-deadline').value = '';
   document.getElementById('tnm-priority').value = 'normalni';
+  _updatePrioHint();
+  _fillPripominka(null);
   document.getElementById('tnm-prof').value = '';
   renderTnmPhotos();
   document.getElementById('tnm-lat').value = (lat !== null && lat !== undefined) ? lat : '';
@@ -7294,6 +7396,64 @@ function addTaskPhotos(input) {
       reader.readAsDataURL(file);
     })(files[i]);
   }
+}
+
+// ── L: výběr fotky k úkolu z galerie appky ──────────────────────────
+var _taskAppGal = { items: [], sel: {} };
+function openTaskAppGalleryPicker(){
+  var modal = document.getElementById('task-appgal-modal');
+  var grid = document.getElementById('task-appgal-grid');
+  if(!modal || !grid) return;
+  _taskAppGal = { items: [], sel: {} };
+  grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text2);font-size:13px;padding:12px;">Načítám…</div>';
+  modal.classList.add('open');
+  db.ref('standalone_photos').orderByChild('ts').once('value', function(snap){
+    var arr = []; snap.forEach(function(ch){ var v=ch.val(); if(!v) return; v.fbKey=ch.key; if(photoVisibleToMe(v)) arr.push(v); });
+    arr.reverse();
+    _taskAppGal.items = arr;
+    _renderTaskAppGallery();
+  });
+}
+function _renderTaskAppGallery(){
+  var grid = document.getElementById('task-appgal-grid');
+  if(!grid) return;
+  if(!_taskAppGal.items.length){ grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text2);font-size:13px;padding:12px;">Žádné fotky v appce.</div>'; return; }
+  grid.innerHTML = _taskAppGal.items.map(function(it){
+    var on = !!_taskAppGal.sel[it.fbKey];
+    return '<div onclick="_taskAppGalToggle(\''+it.fbKey+'\')" style="position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid '+(on?'var(--accent)':'transparent')+';background:var(--panel2);">'
+      +'<img data-key="'+it.fbKey+'" style="width:100%;height:100%;object-fit:cover;display:block;" alt="">'
+      +(on?'<div style="position:absolute;top:4px;right:4px;background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:13px;">✓</div>':'')
+      +'</div>';
+  }).join('');
+  // lazy načtení náhledů
+  _taskAppGal.items.forEach(function(it){
+    resolveFileUrl(it.thumb || it.url).then(function(u){
+      var img = grid.querySelector('img[data-key="'+it.fbKey+'"]');
+      if(img && u && u!=='about:blank') img.src = u;
+    });
+  });
+  var cnt = document.getElementById('task-appgal-count'); if(cnt) cnt.textContent = Object.keys(_taskAppGal.sel).length;
+}
+function _taskAppGalToggle(key){
+  if(_taskAppGal.sel[key]) delete _taskAppGal.sel[key]; else _taskAppGal.sel[key]=true;
+  _renderTaskAppGallery();
+}
+function confirmTaskAppGallery(){
+  var keys = Object.keys(_taskAppGal.sel);
+  if(!keys.length){ closeTaskAppGallery(); return; }
+  var picks = _taskAppGal.items.filter(function(it){ return _taskAppGal.sel[it.fbKey]; });
+  var pending = picks.length;
+  picks.forEach(function(it){
+    resolveFileUrl(it.url).then(function(full){
+      window.taskFormPhotos.push({ url: full || it.url, pending:false, name:'app_'+it.fbKey });
+      pending--; if(pending<=0){ renderTnmPhotos(); }
+    });
+  });
+  showToast('🗂️ Přidáno ' + picks.length + ' fotek', 1600);
+  closeTaskAppGallery();
+}
+function closeTaskAppGallery(){
+  var modal = document.getElementById('task-appgal-modal'); if(modal) modal.classList.remove('open');
 }
 
 function renderAssigneeChips() {
@@ -7371,6 +7531,8 @@ function saveTaskFromForm() {
       task.lat = lat; task.lng = lng;
       if(!isNaN(km)) task.km = km;
     }
+    var _pripo = _buildPripominka(deadline);
+    task.pripominka = _pripo || null;
     saveTaskToFirebase(task, function(){
       closeNewTaskModal();
     });
@@ -7510,6 +7672,8 @@ function editTask() {
   document.getElementById('tnm-text-detail').value = t.text || '';
   document.getElementById('tnm-deadline').value = t.termin || '';
   document.getElementById('tnm-priority').value = t.priorita || 'normalni';
+  _updatePrioHint();
+  _fillPripominka(t.pripominka);
   document.getElementById('tnm-prof').value = t.profese || '';
   document.getElementById('tnm-lat').value = (t.lat !== undefined && t.lat !== null) ? t.lat : '';
   document.getElementById('tnm-lng').value = (t.lng !== undefined && t.lng !== null) ? t.lng : '';
@@ -10489,13 +10653,29 @@ function copyDiaryExport(){
       </div>
       <div>
         <label>Priorita</label>
-        <select class="task-field" id="tnm-priority">
-          <option value="normalni">Normální</option>
-          <option value="vysoka">Vysoká</option>
-          <option value="nizka">Nízká</option>
+        <select class="task-field" id="tnm-priority" onchange="_updatePrioHint()">
+          <option value="normalni">🔔 Normální</option>
+          <option value="vysoka">🚨 Vysoká</option>
+          <option value="nizka">🔕 Nízká</option>
         </select>
+        <div id="tnm-prio-hint" style="font-size:11px;color:var(--text2);margin-top:3px;"></div>
       </div>
     </div>
+
+    <label>🔔 Připomínka (volitelně)</label>
+    <select class="task-field" id="tnm-remind-typ" onchange="_updateRemindUI()">
+      <option value="">Žádná</option>
+      <option value="cas">Přesný datum a čas</option>
+      <option value="pred">Před termínem úkolu</option>
+      <option value="geo">Až budu u stavby (GPS)</option>
+    </select>
+    <input type="datetime-local" class="task-field" id="tnm-remind-at" style="display:none;margin-top:6px;">
+    <select class="task-field" id="tnm-remind-pred" style="display:none;margin-top:6px;">
+      <option value="60">1 hodinu před koncem</option>
+      <option value="180">3 hodiny před koncem</option>
+      <option value="1440">1 den před koncem</option>
+    </select>
+    <div id="tnm-remind-hint" style="font-size:11px;color:var(--text2);margin-top:3px;"></div>
 
     <label>Profese / oddíl (volný text)</label>
     <input type="text" class="task-field" id="tnm-prof" placeholder="geodet / beton / výkop / asfalt / TDS …" list="prof-suggestions">
@@ -10503,8 +10683,13 @@ function copyDiaryExport(){
 
     <label>Fotky (volitelně)</label>
     <div id="tnm-photos-preview" style="display:flex;flex-wrap:wrap;gap:6px;min-height:6px;"></div>
-    <button type="button" class="btn-secondary" style="font-size:13px;padding:8px;cursor:pointer;border-radius:8px;" onclick="document.getElementById('tnm-photo-input').click()">📷 Přidat fotku</button>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" style="flex:1;min-width:90px;font-size:13px;padding:8px;cursor:pointer;border-radius:8px;" onclick="document.getElementById('tnm-photo-input').click()">📷 Vyfotit</button>
+      <button type="button" class="btn-secondary" style="flex:1;min-width:90px;font-size:13px;padding:8px;cursor:pointer;border-radius:8px;" onclick="document.getElementById('tnm-photo-gallery-input').click()">🖼️ Z telefonu</button>
+      <button type="button" class="btn-secondary" style="flex:1;min-width:90px;font-size:13px;padding:8px;cursor:pointer;border-radius:8px;" onclick="openTaskAppGalleryPicker()">🗂️ Z appky</button>
+    </div>
     <input type="file" id="tnm-photo-input" accept="image/*" capture="environment" multiple style="display:none" onchange="addTaskPhotos(this)">
+    <input type="file" id="tnm-photo-gallery-input" accept="image/*" multiple style="display:none" onchange="addTaskPhotos(this)">
 
     <label>Přiřadit (1+ osob)</label>
     <div id="assignee-list"></div>
@@ -10518,6 +10703,22 @@ function copyDiaryExport(){
     <div class="tm-buttons">
       <button class="btn-primary" onclick="saveTaskFromForm()">💾 Uložit</button>
       <button class="btn-secondary" onclick="closeNewTaskModal()">Zrušit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: výběr fotky z galerie appky (k úkolu) -->
+<div class="task-modal" id="task-appgal-modal" style="z-index:4800;">
+  <div class="tm-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-right:4px;">
+      <h3 style="flex:1;">🗂️ Vyber fotky z appky</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeTaskAppGallery()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Klepni na fotky, které chceš přidat k úkolu.</div>
+    <div id="task-appgal-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;max-height:55vh;overflow-y:auto;"></div>
+    <div class="tm-buttons">
+      <button class="btn-primary" onclick="confirmTaskAppGallery()">✓ Přidat vybrané (<span id="task-appgal-count">0</span>)</button>
+      <button class="btn-secondary" onclick="closeTaskAppGallery()">Zrušit</button>
     </div>
   </div>
 </div>

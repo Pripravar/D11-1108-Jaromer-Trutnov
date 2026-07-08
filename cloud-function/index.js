@@ -67,6 +67,13 @@ exports.sendTaskNotifications = functions
       return snap.ref.remove();
     }
 
+    // PRIORITA: nízká u nového úkolu = žádný push (jen tiše v aplikaci)
+    const prio = rec.priorita || 'normalni';
+    if(prio === 'nizka' && rec.typ === 'novy') {
+      console.log('Nízká priorita – push se neposílá.');
+      return snap.ref.remove();
+    }
+
     // Najít FCM tokeny příjemců
     const usersSnap = await db.ref('/uzivatele').once('value');
     const users = usersSnap.val() || {};
@@ -86,10 +93,21 @@ exports.sendTaskNotifications = functions
       notification: { title, body },
       data: {
         taskId: rec.taskId || '',
-        typ:    rec.typ    || ''
+        typ:    rec.typ    || '',
+        priorita: prio
       },
       tokens: tokens
     };
+
+    // VYSOKÁ priorita = důraznější doručení napříč platformami (best-effort)
+    if(prio === 'vysoka') {
+      message.android = { priority: 'high', notification: { priority: 'max' } };
+      message.apns = {
+        headers: { 'apns-priority': '10' },
+        payload: { aps: { 'interruption-level': 'time-sensitive' } }
+      };
+      message.webpush = { headers: { Urgency: 'high' }, notification: { requireInteraction: true } };
+    }
 
     try {
       const resp = await admin.messaging().sendEachForMulticast(message);
@@ -117,6 +135,73 @@ exports.sendTaskNotifications = functions
     }
 
     return snap.ref.remove();
+  });
+
+/* ════════════════════════════════════════════════════════════════
+   SCHEDULED FUNKCE – připomínky u úkolů (čas / před termínem)
+   - Běží každých 15 min (Cloud Scheduler + Pub/Sub)
+   - Projde /ukoly, najde ty s pripominka.at <= teď a sent !== true
+   - Pošle push zadavateli + přiřazeným, označí pripominka.sent = true
+   DEPLOY (uživatel): povol Cloud Scheduler + Pub/Sub API, pak
+     firebase deploy --only functions:checkReminders
+   ════════════════════════════════════════════════════════════════ */
+exports.checkReminders = functions
+  .region('europe-west1')
+  .pubsub.schedule('every 15 minutes')
+  .timeZone('Europe/Prague')
+  .onRun(async () => {
+    const now = Date.now();
+    const tasksSnap = await db.ref('/ukoly').once('value');
+    const tasks = tasksSnap.val() || {};
+    const usersSnap = await db.ref('/uzivatele').once('value');
+    const users = usersSnap.val() || {};
+
+    const jobs = [];
+    Object.keys(tasks).forEach(id => {
+      const t = tasks[id];
+      if(!t || !t.pripominka) return;
+      const p = t.pripominka;
+      if(p.sent === true) return;
+      if(t.stav === 'done') return;
+      if((p.typ !== 'cas' && p.typ !== 'pred')) return;   // geo řeší klient
+      if(!p.at || p.at > now) return;                     // ještě není čas
+      if(now - p.at > 24*3600*1000) {                     // starší 24 h – jen označit, neposílat
+        jobs.push(db.ref('/ukoly/' + id + '/pripominka/sent').set(true));
+        return;
+      }
+
+      // Příjemci = zadavatel + přiřazení
+      let uids = [];
+      if(t.zadalUid) uids.push(t.zadalUid);
+      (t.prirazeno || []).forEach(a => { if(a && a.uid) uids.push(a.uid); });
+      uids = [...new Set(uids)];
+
+      const tokens = [];
+      uids.forEach(uid => { const u = users[uid]; if(u && u.fcmToken) tokens.push(u.fcmToken); });
+
+      if(tokens.length > 0) {
+        const message = {
+          notification: { title: '🔔 Připomínka úkolu', body: (t.title || 'Úkol') + ' – blíží se termín.' },
+          data: { taskId: id, typ: 'pripominka' },
+          android: { priority: 'high', notification: { priority: 'max' } },
+          apns: { headers: { 'apns-priority': '10' }, payload: { aps: { 'interruption-level': 'time-sensitive' } } },
+          webpush: { headers: { Urgency: 'high' }, notification: { requireInteraction: true } },
+          tokens: tokens
+        };
+        jobs.push(
+          admin.messaging().sendEachForMulticast(message)
+            .then(() => db.ref('/ukoly/' + id + '/pripominka/sent').set(true))
+            .catch(e => { console.error('Připomínka FCM chyba:', e); })
+        );
+      } else {
+        // Nikdo nemá token – označit jako odeslané, ať to nezkouší donekonečna
+        jobs.push(db.ref('/ukoly/' + id + '/pripominka/sent').set(true));
+      }
+    });
+
+    await Promise.all(jobs);
+    console.log('checkReminders: zpracováno ' + jobs.length + ' připomínek.');
+    return null;
   });
 
 /* ════════════════════════════════════════════════════════════════
