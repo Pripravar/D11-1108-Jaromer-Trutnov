@@ -101,6 +101,8 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #layers-panel h3 { font-size:11px; text-transform:uppercase; letter-spacing:1px; color:var(--text2); margin-bottom:8px; margin-top:10px; }
 #layers-panel h3:first-child { margin-top:0; }
 .layer-row { display:flex; align-items:center; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--border); font-size:14px; }
+.layer-sub { display:none; }
+.layer-sub.open { display:block; }
 .layer-row:last-child { border-bottom:none; }
 #basemap-row { display:flex; gap:5px; margin-bottom:4px; }
 .bm-btn { flex:1; background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text2); font-size:10px; padding:5px 2px; cursor:pointer; text-align:center; transition:all .15s; }
@@ -1131,6 +1133,8 @@ document.addEventListener('touchend', function(e){
   <button id="btn-gallery" onclick="openGallery()" title="Fotogalerie" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🖼️</button>
   <button id="btn-notes-evidence" onclick="openNotesEvidence()" title="Evidence poznámek" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📝</button>
   <button id="btn-geo" onclick="openGeotechPanel()" title="Geotechnický monitoring – zprávy, profily, pasporty" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🪨</button>
+  <button id="btn-dokumenty" onclick="openDokumenty()" title="Dokumenty – KZP, TePř, protokoly" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📋</button>
+  <button id="btn-zkousky" onclick="openZkousky()" title="Zkoušky na stavbě – laboratorní průvodky" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🧫</button>
   <button id="btn-reset-view" onclick="resetMapView()" title="Reset pohledu" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">⌂</button>
   <div id="user-badge" onclick="showUserMenu()" title="Uživatel"><img id="user-photo" src="" alt=""><span id="user-name">…</span></div>
   <button id="btn-layers" onclick="toggleLayers()">☰ Vrstvy</button>
@@ -1151,6 +1155,10 @@ document.addEventListener('touchend', function(e){
     <label class="toggle"><input type="checkbox" id="lyr-katastr" onchange="toggleKatastr(this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <h3>📍 Vrstvy</h3>
+  <div id="layer-defaults-row" style="display:flex;gap:6px;margin-bottom:8px;">
+    <button onclick="saveLayerDefaults()" style="flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px;font-size:12px;cursor:pointer;" title="Zapamatovat aktuální zapnuté vrstvy jako výchozí na tomto zařízení">💾 Uložit jako výchozí</button>
+    <button onclick="resetLayerDefaults()" style="background:var(--panel2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;" title="Vrátit standardní zobrazení">↺</button>
+  </div>
   <div class="layer-row">
     <label>🛣️ Trasa</label>
     <label class="toggle"><input type="checkbox" id="lyr-trasa" checked onchange="toggleLayer('trasa',this.checked)"><span class="toggle-slider"></span></label>
@@ -1167,6 +1175,7 @@ document.addEventListener('touchend', function(e){
     <label>📝 Poznámky</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes" onchange="toggleNotesLayer(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-sub" id="sub-notes">
   <div class="layer-row" style="padding-left:12px;">
     <label style="font-size:12px;">↳ 📌 Obecná</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes0" onchange="toggleLayer('notes0',this.checked)"><span class="toggle-slider"></span></label>
@@ -1195,10 +1204,12 @@ document.addEventListener('touchend', function(e){
     <label style="font-size:12px;" id="notes-lbl-6">↳ 🏷️ Vlastní</label>
     <label class="toggle"><input type="checkbox" id="lyr-notes6" onchange="toggleLayer('notes6',this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  </div>
   <div class="layer-row">
     <label>✅ Úkoly</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks" checked onchange="toggleTasksLayer(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-sub" id="sub-tasks">
   <div class="layer-row" style="padding-left:12px;">
     <label style="font-size:12px;">↳ 🟡 Otevřené</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks-open" checked onchange="toggleTaskSubLayer('open',this.checked)"><span class="toggle-slider"></span></label>
@@ -1206,6 +1217,7 @@ document.addEventListener('touchend', function(e){
   <div class="layer-row" style="padding-left:12px;">
     <label style="font-size:12px;">↳ 🟢 Hotové</label>
     <label class="toggle"><input type="checkbox" id="lyr-tasks-done" onchange="toggleTaskSubLayer('done',this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   </div>
   <div class="layer-row" data-perm="pdf">
     <label>🔵 Propustky (SO 104, SO 105)</label>
@@ -1231,10 +1243,28 @@ document.addEventListener('touchend', function(e){
     <label>📏 Měření (tým)</label>
     <label class="toggle"><input type="checkbox" id="lyr-mereni" checked onchange="setMereniVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row">
+    <label>🧫 Zkoušky na stavbě</label>
+    <label class="toggle"><input type="checkbox" id="lyr-zkousky" onchange="setZkouskyVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   <h3>📷 Fotky</h3>
   <div class="layer-row">
     <label>🗺️ Fotky v mapě</label>
     <label class="toggle"><input type="checkbox" id="lyr-fotomapa" onchange="setFotoMapaVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="layer-sub" id="sub-fotomapa">
+    <div class="layer-row" style="padding-left:12px;">
+      <label style="font-size:12px;">↳ 👤 Osoba</label>
+      <select id="fm-osoba" onchange="applyFotoMapaFilter()" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:12px;padding:3px 6px;max-width:120px;"><option value="">Všichni</option></select>
+    </div>
+    <div class="layer-row" style="padding-left:12px;">
+      <label style="font-size:12px;">↳ 📷 SUB fotky</label>
+      <select id="fm-sub" onchange="applyFotoMapaFilter()" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:12px;padding:3px 6px;"><option value="">Všechny</option><option value="od">Od SUB</option><option value="pro">Sdílené pro SUB</option></select>
+    </div>
+    <div class="layer-row" style="padding-left:12px;">
+      <label style="font-size:12px;">↳ 🕘 I starší než měsíc</label>
+      <label class="toggle"><input type="checkbox" id="fm-vse" onchange="applyFotoMapaFilter()"><span class="toggle-slider"></span></label>
+    </div>
   </div>
   <div class="layer-row">
     <label>🏷️ Razítko (km, datum, jméno)</label>
@@ -2562,6 +2592,8 @@ function init() {
   loadMereni();       // týmová měření (délka/plocha)
   loadCustomSO();     // vlastní objekty (deponie, ZS) pro výběr SO u fotek
   loadCategoryPerms(); // výchozí práva kategorií (sub/investor)
+  loadDokumenty();    // modul Dokumenty (KZP/TePř/protokoly)
+  loadZkousky();      // modul Zkoušky na stavbě (+ body v mapě)
   initLongPress();
   // Zastavit touch eventy z panelů aby nešly do Leaflet mapy
   ['pdf-panel','prop-panel'].forEach(function(id) {
@@ -4095,8 +4127,49 @@ function deleteCurrentNote() {
   deleteNote_fromFirebase(id, null);
 }
 
+// ── R: sbalitelné podkategorie ve Vrstvách ─────────────────────────
+function _setLayerSub(id, show){ var el=document.getElementById(id); if(el) el.classList.toggle('open', !!show); }
+
+// ── S: výchozí zobrazení vrstev (per zařízení, localStorage) ───────
+function _layerToggleInputs(){
+  return Array.prototype.slice.call(document.querySelectorAll('#layers-panel input[id^="lyr-"]'))
+    .filter(function(cb){ return cb.id !== 'lyr-stamp'; });   // razítko není mapová vrstva
+}
+function saveLayerDefaults(){
+  var map1 = {};
+  _layerToggleInputs().forEach(function(cb){ map1[cb.id] = cb.checked; });
+  try { localStorage.setItem('layerDefaults', JSON.stringify(map1)); } catch(e){}
+  showToast('💾 Uloženo jako výchozí zobrazení', 2000);
+}
+function resetLayerDefaults(){
+  try { localStorage.removeItem('layerDefaults'); } catch(e){}
+  _layerToggleInputs().forEach(function(cb){
+    if(cb.checked !== cb.defaultChecked){ cb.checked = cb.defaultChecked; cb.dispatchEvent(new Event('change')); }
+  });
+  showToast('↺ Standardní zobrazení obnoveno', 2000);
+}
+// Na startu otevři podkategorie podle stavu hlavního přepínače
+function _initLayerSubs(){
+  var t = document.getElementById('lyr-tasks'); _setLayerSub('sub-tasks', t && t.checked);
+  var n = document.getElementById('lyr-notes'); _setLayerSub('sub-notes', n && n.checked);
+  var f = document.getElementById('lyr-fotomapa'); _setLayerSub('sub-fotomapa', f && f.checked);
+}
+function applyLayerDefaults(){
+  if(window.subMode || (typeof isSubOnly==='function' && isSubOnly())) return;   // subka má vynucený pohled
+  var raw; try { raw = localStorage.getItem('layerDefaults'); } catch(e){ return; }
+  if(!raw) return;
+  var map1; try { map1 = JSON.parse(raw); } catch(e){ return; }
+  if(!map1) return;
+  Object.keys(map1).forEach(function(id){
+    var cb = document.getElementById(id); if(!cb) return;
+    var want = map1[id] === true;
+    if(cb.checked !== want){ cb.checked = want; cb.dispatchEvent(new Event('change')); }
+  });
+}
+
 // ── Layer toggle pro poznámky ──────────────────────────
 function toggleNotesLayer(en) {
+  _setLayerSub('sub-notes', en);
   if(!notesLayer) return;
   en ? notesLayer.addTo(map) : map.removeLayer(notesLayer);
 }
@@ -4886,42 +4959,71 @@ function _fotoMapaIcon(){
     +'<div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid #2e7d32;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 4px rgba(0,0,0,.4);">📷</div>'
     +'<div style="position:absolute;left:50%;top:28px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #2e7d32;"></div></div>' });
 }
-function buildFotoMapa(){
-  if(typeof L.markerClusterGroup !== 'function'){ showToast('⚠️ Fotomapa se nenačetla (offline?)', 2500); return null; }
-  if(fotoMapaLayer){ fotoMapaLayer.clearLayers(); } else {
+var _fotoMapaPhotos = [];   // cache fotek s polohou (viditelných pro mě)
+function _ensureFotoMapaLayer(){
+  if(typeof L.markerClusterGroup !== 'function') return null;
+  if(!fotoMapaLayer){
     fotoMapaLayer = L.markerClusterGroup({ maxClusterRadius: 45, showCoverageOnHover:false, spiderfyOnMaxZoom:true, chunkedLoading:true });
     layerGroups.fotomapa = fotoMapaLayer;
   }
-  db.ref('standalone_photos').once('value', function(snap){
-    var n=0;
-    snap.forEach(function(ch){
-      var v = ch.val(); if(!v || v.lat==null || v.lng==null) return;
-      if(!photoVisibleToMe(v)) return;   // sub/investor jen sdílené fotky
-      v.fbKey = ch.key;
-      var m = L.marker([v.lat, v.lng], { icon:_fotoMapaIcon(), zIndexOffset:120 });
-      var thumbPath = v.thumb || v.url;
-      // Lazy náhled do ikony
-      resolveFileUrl(thumbPath).then(function(u){
-        if(!u || u==='about:blank') return;
-        m.setIcon(L.divIcon({ className:'', iconSize:[46,46], iconAnchor:[23,46], html:
-          '<div style="position:relative;width:46px;height:46px;">'
-          +'<div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:42px;height:42px;border-radius:8px;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.5);background:#000 center/cover no-repeat url('+u+');"></div>'
-          +'<div style="position:absolute;left:50%;top:40px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fff;"></div></div>' }));
-      });
-      m.on('click', function(){
-        resolveFileUrl(v.url).then(function(full){ openPhotoFs(full, v.fbKey, v); });
-      });
-      fotoMapaLayer.addLayer(m);
-      n++;
-    });
-    if(n===0) showToast('Zatím žádné fotky s polohou', 2200);
-  });
   return fotoMapaLayer;
 }
+// T: naplní select 👤 Osoba z autorů fotek v cache
+function _fillFotoMapaOsoby(){
+  var sel = document.getElementById('fm-osoba'); if(!sel) return;
+  var cur = sel.value, set = {};
+  _fotoMapaPhotos.forEach(function(v){ if(v.author) set[v.author]=1; });
+  var names = Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'cs'); });
+  sel.innerHTML = '<option value="">Všichni</option>' + names.map(function(n){ return '<option value="'+escapeHtml(n)+'">'+escapeHtml(n)+'</option>'; }).join('');
+  if(names.indexOf(cur)>=0) sel.value = cur;
+}
+// T: filtr fotek dle vnořených ovladačů (osoba / SUB / stáří)
+function _fotoMapaFiltered(){
+  var osoba = (document.getElementById('fm-osoba')||{}).value || '';
+  var sub   = (document.getElementById('fm-sub')||{}).value || '';
+  var vse   = (document.getElementById('fm-vse')||{}).checked;
+  var cut = 0;
+  if(!vse){ var d=new Date(); d.setMonth(d.getMonth()-1); cut = d.getTime(); }
+  return _fotoMapaPhotos.filter(function(v){
+    if(osoba && (v.author||'')!==osoba) return false;
+    if(sub==='od'  && !(v.sub===true || v.zdroj==='SUB')) return false;
+    if(sub==='pro' && v.sdilenoSub!==true) return false;
+    if(cut){ var t = (typeof photoCreationDate==='function') ? photoCreationDate(v).getTime() : (v.ts||0); if(t < cut) return false; }
+    return true;
+  });
+}
+function renderFotoMapa(){
+  var lyr = _ensureFotoMapaLayer(); if(!lyr) return;
+  lyr.clearLayers();
+  var arr = _fotoMapaFiltered();
+  arr.forEach(function(v){
+    var m = L.marker([v.lat, v.lng], { icon:_fotoMapaIcon(), zIndexOffset:120 });
+    resolveFileUrl(v.thumb || v.url).then(function(u){
+      if(!u || u==='about:blank') return;
+      m.setIcon(L.divIcon({ className:'', iconSize:[46,46], iconAnchor:[23,46], html:
+        '<div style="position:relative;width:46px;height:46px;">'
+        +'<div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:42px;height:42px;border-radius:8px;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.5);background:#000 center/cover no-repeat url('+u+');"></div>'
+        +'<div style="position:absolute;left:50%;top:40px;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid #fff;"></div></div>' }));
+    });
+    m.on('click', function(){ resolveFileUrl(v.url).then(function(full){ openPhotoFs(full, v.fbKey, v); }); });
+    lyr.addLayer(m);
+  });
+}
+function applyFotoMapaFilter(){ if(fotoMapaLayer && map.hasLayer(fotoMapaLayer)) renderFotoMapa(); }
 function setFotoMapaVisible(on){
   var cb=document.getElementById('lyr-fotomapa'); if(cb) cb.checked=!!on;
-  if(on){ if(!buildFotoMapa()){ if(cb) cb.checked=false; return; } fotoMapaLayer.addTo(map); }
-  else if(fotoMapaLayer && map.hasLayer(fotoMapaLayer)) map.removeLayer(fotoMapaLayer);
+  _setLayerSub('sub-fotomapa', on);
+  if(on){
+    if(!_ensureFotoMapaLayer()){ showToast('⚠️ Fotomapa se nenačetla (offline?)', 2500); if(cb) cb.checked=false; _setLayerSub('sub-fotomapa', false); return; }
+    db.ref('standalone_photos').once('value', function(snap){
+      _fotoMapaPhotos = [];
+      snap.forEach(function(ch){ var v=ch.val(); if(!v||v.lat==null||v.lng==null) return; if(!photoVisibleToMe(v)) return; v.fbKey=ch.key; _fotoMapaPhotos.push(v); });
+      _fillFotoMapaOsoby();
+      renderFotoMapa();
+      if(_fotoMapaFiltered().length===0) showToast('Žádné fotky s polohou (zkus „I starší než měsíc")', 2600);
+    });
+    fotoMapaLayer.addTo(map);
+  } else if(fotoMapaLayer && map.hasLayer(fotoMapaLayer)) map.removeLayer(fotoMapaLayer);
 }
 
 function buildDoplnky() {
@@ -6585,6 +6687,10 @@ function _enterApp(displayName){
   setupFcmIfPossible();
   maybeShowIosHint();
   setTimeout(applyPermsToUI, 400);   // skrýt zakázané funkce (allUsers se dočte z .on())
+  _initLayerSubs();                  // otevři podkategorie dle hlavních přepínačů
+  // Výchozí zobrazení vrstev (per zařízení) – 2× kvůli vrstvám dotahovaným z Firebase async
+  setTimeout(applyLayerDefaults, 1000);
+  setTimeout(applyLayerDefaults, 3000);
   // Deep-link ?foto / #foto → velké tlačítko „Fotit" (iOS nemůže spustit foťák bez gesta)
   if(/foto/i.test((location.hash||'') + (location.search||''))) setTimeout(_showFotoDeepLink, 700);
 }
@@ -6853,7 +6959,9 @@ var FEATURES = [
   {key:'ukoly',      label:'Úkolníček',               btns:['btn-tasks']},
   {key:'denik',      label:'Deník / sichtovka',       btns:['btn-denik']},
   {key:'kvalita',    label:'Kvalita / KZP',           btns:['btn-kzp']},
-  {key:'geo',        label:'Geotechnika',             btns:['btn-geo']}
+  {key:'geo',        label:'Geotechnika',             btns:['btn-geo']},
+  {key:'dokumenty',  label:'Dokumenty (KZP/TePř/protokoly)', btns:['btn-dokumenty']},
+  {key:'zkousky',    label:'Zkoušky na stavbě',        btns:['btn-zkousky']}
 ];
 // ── Kategorie práv: 'silnice' (náš tým M-SILNICE) / 'sub' (subdodavatel) / 'investor' ──
 // silnice = vidí vše (jednotlivce lze omezit override). sub/investor = deny-by-default,
@@ -6902,6 +7010,229 @@ function applyPermsToUI(){
 }
 // Backstop guard pro vstupní funkce (skrytí tlačítka je hlavní gate)
 function featGuard(key){ if(hasPerm(key)) return true; showToast('🔒 Tuhle funkci ti admin nepovolil', 2600); return false; }
+
+/* ════════════════════════════════════════════════════════════════
+   MODUL N: DOKUMENTY (KZP / TePř / protokoly) – úložiště PDF
+   /dokumenty/{id} = {kat, nazev, so, soubor, uid, author, ts}
+   PDF do Storage: pdf/uploads/dokumenty/{kat}/… (už writable, bez změny pravidel)
+   ════════════════════════════════════════════════════════════════ */
+window.allDokumenty = {};
+window.dokFilterCat = '';
+var DOK_KATEGORIE = ['KZP','TePř','Protokol','Ostatní'];
+function loadDokumenty(){
+  if(typeof db === 'undefined') return;
+  db.ref('dokumenty').on('value', function(snap){
+    window.allDokumenty = snap.val() || {};
+    if(document.getElementById('dokumenty-modal') && document.getElementById('dokumenty-modal').classList.contains('open')) renderDokList();
+  });
+}
+function openDokumenty(){
+  if(!featGuard('dokumenty')) return;
+  _fillDokSoList();
+  window.dokFilterCat = '';
+  renderDokFilter(); renderDokList();
+  document.getElementById('dokumenty-modal').classList.add('open');
+}
+function closeDokumenty(){ document.getElementById('dokumenty-modal').classList.remove('open'); }
+function _fillDokSoList(){
+  var dl = document.getElementById('dok-so-list'); if(!dl) return;
+  var sos = []; try { sos = Array.from(getAllProjectSOs()); } catch(e){}
+  dl.innerHTML = sos.sort(function(a,b){return String(a).localeCompare(b,'cs',{numeric:true});}).map(function(s){ return '<option value="'+escapeHtml(s)+'">'; }).join('');
+}
+function setDokFilter(cat){ window.dokFilterCat = cat; renderDokFilter(); renderDokList(); }
+function renderDokFilter(){
+  var box = document.getElementById('dok-filter'); if(!box) return;
+  function chip(val,lbl){ var on = window.dokFilterCat===val; return '<button onclick="setDokFilter(\''+val+'\')" style="background:'+(on?'var(--accent)':'var(--panel2)')+';color:'+(on?'#fff':'var(--text)')+';border:1px solid var(--border);border-radius:14px;padding:5px 11px;font-size:12px;cursor:pointer;">'+lbl+'</button>'; }
+  box.innerHTML = chip('','Vše') + DOK_KATEGORIE.map(function(k){ return chip(k,k); }).join('');
+}
+function renderDokList(){
+  var box = document.getElementById('dok-list'); if(!box) return;
+  var arr = Object.keys(window.allDokumenty).map(function(id){ var d=window.allDokumenty[id]; d._id=id; return d; });
+  if(window.dokFilterCat) arr = arr.filter(function(d){ return d.kat===window.dokFilterCat; });
+  arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if(!arr.length){ box.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:14px;text-align:center;">Žádné dokumenty'+(window.dokFilterCat?' v kategorii '+window.dokFilterCat:'')+'.</div>'; return; }
+  box.innerHTML = arr.map(function(d){
+    var canDel = isOwner(d,'uid') || (typeof isAdmin==='function' && isAdmin());
+    var meta = [d.kat, (d.so||''), (d.author||''), (d.ts?new Date(d.ts).toLocaleDateString('cs-CZ'):'')].filter(Boolean).join(' · ');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--border);">'
+      +'<div style="flex:1;min-width:0;cursor:pointer;" onclick="openDokument(\''+d._id+'\')">'
+      +'<div style="font-weight:700;font-size:14px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📄 '+escapeHtml(d.nazev||'dokument')+'</div>'
+      +'<div style="font-size:11px;color:var(--text2);">'+escapeHtml(meta)+'</div></div>'
+      +(canDel?'<button onclick="deleteDokument(\''+d._id+'\')" style="background:none;border:none;color:#e94560;font-size:16px;cursor:pointer;padding:4px;">🗑️</button>':'')
+      +'</div>';
+  }).join('');
+}
+function uploadDokument(input){
+  var file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  if((file.name||'').toLowerCase().slice(-4)!=='.pdf'){ showToast('Vyber soubor PDF', 2500); return; }
+  if(file.size > 30*1024*1024){ showToast('❌ PDF je moc velké (max 30 MB).', 4000); return; }
+  if(!storage){ showToast('❌ Storage nedostupné', 3000); return; }
+  var kat = document.getElementById('dok-up-kat').value || 'Ostatní';
+  var so = (document.getElementById('dok-up-so').value || '').trim();
+  var nazev = prompt('Název dokumentu (jak se zobrazí):', file.name.replace(/\.pdf$/i,''));
+  if(nazev===null) return;
+  nazev = (nazev||'').trim() || file.name.replace(/\.pdf$/i,'');
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var base64 = String(ev.target.result||'').replace(/^data:[^;]+;base64,/,'');
+    if(!base64){ showToast('❌ Nepodařilo se načíst soubor', 3000); return; }
+    var ts = Date.now();
+    var safe = nazev.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/_+/g,'_').slice(0,60) || 'dokument';
+    var path = 'pdf/uploads/dokumenty/' + kat.replace(/[^A-Za-z0-9]+/g,'_') + '/' + ts + '_' + safe + '.pdf';
+    showSync('⏳ Nahrávám dokument…');
+    storage.ref(path).putString(base64,'base64',{contentType:'application/pdf'})
+      .then(function(){
+        return db.ref('dokumenty').push({ kat:kat, nazev:nazev, so:so, soubor:path,
+          uid:(window.currentUser?window.currentUser.uid:null), author:(window.currentUser?window.currentUser.name:''), ts:ts });
+      })
+      .then(function(){ hideSync(); showToast('✅ Dokument nahrán', 2500); })
+      .catch(function(e){ hideSync(); console.error('uploadDokument:', e); showToast('❌ Nahrání selhalo (pravidla?)', 4000); });
+  };
+  reader.readAsDataURL(file);
+}
+function openDokument(id){
+  var d = window.allDokumenty[id]; if(!d || !d.soubor) return;
+  resolveFileUrl(d.soubor).then(function(u){ window.open(pdfViewerUrl(u), '_blank', 'noopener'); });
+}
+function deleteDokument(id){
+  var d = window.allDokumenty[id]; if(!d) return;
+  if(!(isOwner(d,'uid') || (typeof isAdmin==='function' && isAdmin()))){ showToast('Smazat může jen ten, kdo dokument nahrál', 3000); return; }
+  if(!confirm('Smazat dokument "'+(d.nazev||'')+'"?')) return;
+  if(d.soubor && storage){ storage.ref(d.soubor).delete().catch(function(){}); }
+  db.ref('dokumenty/'+id).remove().then(function(){ showToast('🗑️ Smazáno', 1600); }).catch(function(){ showToast('❌ Chyba mazání', 2500); });
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MODUL O: ZKOUŠKY NA STAVBĚ (laboratorní průvodky) + body v mapě
+   /zkousky/{id} = {nazev,km,so,datum,cas,technik,firma,vrstva,material,
+                    vysledek,protokol,lat,lng,uid,author,ts}
+   Dokud chybí výsledek/protokol → „⏳ čeká na protokol" + ⚠️ pin.
+   ════════════════════════════════════════════════════════════════ */
+window.allZkousky = {};
+var zkouskyLayer = null;
+function loadZkousky(){
+  if(typeof db === 'undefined') return;
+  db.ref('zkousky').on('value', function(snap){
+    window.allZkousky = snap.val() || {};
+    if(document.getElementById('zkousky-modal') && document.getElementById('zkousky-modal').classList.contains('open')) renderZkList();
+    if(zkouskyLayer && map && map.hasLayer(zkouskyLayer)) renderZkouskyMarkers();
+  });
+}
+function _zkWaiting(z){ return !(z.vysledek && String(z.vysledek).trim()) || !(z.protokol && String(z.protokol).trim()); }
+function openZkousky(){ if(!featGuard('zkousky')) return; renderZkList(); document.getElementById('zkousky-modal').classList.add('open'); }
+function closeZkousky(){ document.getElementById('zkousky-modal').classList.remove('open'); }
+function renderZkList(){
+  var box = document.getElementById('zk-list'); if(!box) return;
+  var arr = Object.keys(window.allZkousky).map(function(id){ var z=window.allZkousky[id]; z._id=id; return z; });
+  arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+  if(!arr.length){ box.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:14px;text-align:center;">Zatím žádné zkoušky.</div>'; return; }
+  box.innerHTML = arr.map(function(z){
+    var canEdit = isOwner(z,'uid') || (typeof isAdmin==='function' && isAdmin());
+    var waiting = _zkWaiting(z);
+    var badge = waiting ? '<span style="background:#e67e22;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;">⏳ čeká na protokol</span>'
+                        : '<span style="background:#2e7d32;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;">✓ '+escapeHtml(z.vysledek)+'</span>';
+    var meta = [(z.km?'km '+z.km:''), (z.so||''), (z.datum||''), (z.firma||''), (z.vrstva||'')].filter(Boolean).join(' · ');
+    return '<div style="padding:9px 4px;border-bottom:1px solid var(--border);">'
+      +'<div style="display:flex;align-items:center;gap:8px;">'
+      +'<div style="flex:1;min-width:0;"><div style="font-weight:700;font-size:14px;color:var(--text);">🧫 '+escapeHtml(z.nazev||'zkouška')+'</div>'
+      +'<div style="font-size:11px;color:var(--text2);">'+escapeHtml(meta)+'</div></div>'
+      + badge
+      +'</div>'
+      +(canEdit?'<div style="display:flex;gap:8px;margin-top:5px;"><button onclick="editZkouska(\''+z._id+'\')" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;">✏️ Upravit</button>'
+        +'<button onclick="deleteZkouska(\''+z._id+'\')" style="background:none;border:none;color:#e94560;font-size:12px;cursor:pointer;">🗑️ Smazat</button></div>':'')
+      +'</div>';
+  }).join('');
+}
+function openZkouskaForm(){
+  document.getElementById('zkf-title').textContent = '➕ Nová zkouška';
+  ['zkf-id','zkf-nazev','zkf-km','zkf-so','zkf-datum','zkf-cas','zkf-technik','zkf-firma','zkf-vrstva','zkf-material','zkf-vysledek','zkf-protokol'].forEach(function(idf){ var el=document.getElementById(idf); if(el) el.value=''; });
+  // předvyplnit km z GPS + dnešní datum
+  var d = new Date();
+  document.getElementById('zkf-datum').value = d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+  document.getElementById('zkf-cas').value = pad2(d.getHours())+':'+pad2(d.getMinutes());
+  if(gpsActive && gpsMarker){ try { var ll=gpsMarker.getLatLng(); document.getElementById('zkf-km').value = fmtKm(gpxCumToRealKm(nearestOnRoute(ll.lat,ll.lng).cum)); } catch(e){} }
+  _fillZkSoList();
+  document.getElementById('zkouska-form-modal').classList.add('open');
+}
+function _fillZkSoList(){
+  var dl = document.getElementById('zk-so-list'); if(!dl) return;
+  var sos = []; try { sos = Array.from(getAllProjectSOs()); } catch(e){}
+  dl.innerHTML = sos.sort(function(a,b){return String(a).localeCompare(b,'cs',{numeric:true});}).map(function(s){ return '<option value="'+escapeHtml(s)+'">'; }).join('');
+}
+function closeZkouskaForm(){ document.getElementById('zkouska-form-modal').classList.remove('open'); }
+function editZkouska(id){
+  var z = window.allZkousky[id]; if(!z) return;
+  if(!(isOwner(z,'uid') || (typeof isAdmin==='function' && isAdmin()))){ showToast('Upravit může jen autor záznamu', 3000); return; }
+  document.getElementById('zkf-title').textContent = '✏️ Upravit zkoušku';
+  document.getElementById('zkf-id').value = id;
+  var map1 = {'zkf-nazev':'nazev','zkf-km':'km','zkf-so':'so','zkf-datum':'datum','zkf-cas':'cas','zkf-technik':'technik','zkf-firma':'firma','zkf-vrstva':'vrstva','zkf-material':'material','zkf-vysledek':'vysledek','zkf-protokol':'protokol'};
+  Object.keys(map1).forEach(function(idf){ var el=document.getElementById(idf); if(el) el.value = z[map1[idf]] || ''; });
+  _fillZkSoList();
+  document.getElementById('zkouska-form-modal').classList.add('open');
+}
+function saveZkouska(){
+  if(!window.currentUser){ showToast('Pro uložení se přihlas', 2500); return; }
+  var nazev = document.getElementById('zkf-nazev').value.trim();
+  if(!nazev){ showToast('Zadej název zkoušky', 2000); return; }
+  var id = document.getElementById('zkf-id').value;
+  var existing = id ? window.allZkousky[id] : null;
+  var rec = {
+    nazev:nazev,
+    km: document.getElementById('zkf-km').value.trim(),
+    so: document.getElementById('zkf-so').value.trim(),
+    datum: document.getElementById('zkf-datum').value,
+    cas: document.getElementById('zkf-cas').value,
+    technik: document.getElementById('zkf-technik').value.trim(),
+    firma: document.getElementById('zkf-firma').value.trim(),
+    vrstva: document.getElementById('zkf-vrstva').value.trim(),
+    material: document.getElementById('zkf-material').value.trim(),
+    vysledek: document.getElementById('zkf-vysledek').value.trim(),
+    protokol: document.getElementById('zkf-protokol').value.trim(),
+    uid: existing ? existing.uid : window.currentUser.uid,
+    author: existing ? existing.author : window.currentUser.name,
+    ts: existing ? existing.ts : Date.now(),
+    upraveno: Date.now()
+  };
+  // Poloha z GPS jen u nové zkoušky (u editace zachovat původní)
+  if(existing && existing.lat!=null){ rec.lat=existing.lat; rec.lng=existing.lng; }
+  else if(gpsActive && gpsMarker){ var ll=gpsMarker.getLatLng(); rec.lat=ll.lat; rec.lng=ll.lng; }
+  var ref = id ? db.ref('zkousky/'+id) : db.ref('zkousky').push();
+  ref.set(rec)
+    .then(function(){ showToast('✅ Zkouška uložena', 1800); closeZkouskaForm(); })
+    .catch(function(){ showToast('❌ Uložení selhalo', 2500); });
+}
+function deleteZkouska(id){
+  var z = window.allZkousky[id]; if(!z) return;
+  if(!(isOwner(z,'uid') || (typeof isAdmin==='function' && isAdmin()))){ showToast('Smazat může jen autor záznamu', 3000); return; }
+  if(!confirm('Smazat zkoušku "'+(z.nazev||'')+'"?')) return;
+  db.ref('zkousky/'+id).remove().then(function(){ showToast('🗑️ Smazáno', 1600); }).catch(function(){ showToast('❌ Chyba mazání', 2500); });
+}
+function renderZkouskyMarkers(){
+  if(!zkouskyLayer) return;
+  zkouskyLayer.clearLayers();
+  Object.keys(window.allZkousky).forEach(function(id){
+    var z = window.allZkousky[id]; if(!z || z.lat==null || z.lng==null) return;
+    var waiting = _zkWaiting(z);
+    var col = waiting ? '#e67e22' : '#2e7d32';
+    var icon = L.divIcon({className:'', iconSize:[0,0], html:
+      '<div style="position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;">'
+      +'<div style="width:16px;height:16px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:9px;">'+(waiting?'⏳':'✓')+'</div></div>'});
+    var m = L.marker([z.lat,z.lng],{icon:icon, zIndexOffset:140});
+    m.bindPopup('<div style="font-size:13px;min-width:170px;"><div style="font-weight:800;">🧫 '+escapeHtml(z.nazev||'zkouška')+'</div>'
+      +'<div style="margin-top:3px;">'+[(z.km?'km '+z.km:''),(z.so||''),(z.datum||'')].filter(Boolean).map(escapeHtml).join(' · ')+'</div>'
+      +'<div style="margin-top:3px;color:'+(waiting?'#e67e22':'#2e7d32')+';font-weight:700;">'+(waiting?'⏳ čeká na výsledek/protokol':'✓ '+escapeHtml(z.vysledek))+'</div>'
+      +'<button onclick="openZkousky()" style="margin-top:7px;background:#0f3460;color:#fff;border:none;border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer;">Otevřít zkoušky</button></div>');
+    m.addTo(zkouskyLayer);
+  });
+}
+function setZkouskyVisible(on){
+  if(!zkouskyLayer){ zkouskyLayer = L.layerGroup(); layerGroups.zkousky = zkouskyLayer; }
+  var cb=document.getElementById('lyr-zkousky'); if(cb) cb.checked=!!on;
+  if(on){ renderZkouskyMarkers(); zkouskyLayer.addTo(map); }
+  else if(map.hasLayer(zkouskyLayer)) map.removeLayer(zkouskyLayer);
+}
 
 // Relativní čas „● online" / „před X"
 function _relTime(ts){
@@ -7772,6 +8103,7 @@ function renderTasksOnMap() {
 
 function toggleTasksLayer(visible) {
   window.tasksLayerVisible = visible;
+  _setLayerSub('sub-tasks', visible);
   if(!window.tasksLayer) return;
   if(visible) {
     if(!map.hasLayer(window.tasksLayer)) window.tasksLayer.addTo(map);
@@ -10719,6 +11051,85 @@ function copyDiaryExport(){
     <div class="tm-buttons">
       <button class="btn-primary" onclick="confirmTaskAppGallery()">✓ Přidat vybrané (<span id="task-appgal-count">0</span>)</button>
       <button class="btn-secondary" onclick="closeTaskAppGallery()">Zrušit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Dokumenty (KZP / TePř / protokoly) -->
+<div class="task-modal" id="dokumenty-modal" style="z-index:4600;">
+  <div class="tm-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-right:4px;">
+      <h3 style="flex:1;">📋 Dokumenty</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeDokumenty()">✕</button>
+    </div>
+    <div id="dok-filter" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0;"></div>
+    <div id="dok-list" style="max-height:48vh;overflow-y:auto;"></div>
+    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">➕ Nahrát dokument (PDF)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select class="task-field" id="dok-up-kat" style="flex:1;min-width:110px;">
+          <option value="KZP">KZP</option>
+          <option value="TePř">TePř</option>
+          <option value="Protokol">Protokol</option>
+          <option value="Ostatní">Ostatní</option>
+        </select>
+        <input class="task-field" id="dok-up-so" list="dok-so-list" placeholder="SO (volitelně)" style="flex:1;min-width:110px;">
+        <datalist id="dok-so-list"></datalist>
+      </div>
+      <button class="btn-primary" style="margin-top:6px;width:100%;" onclick="document.getElementById('dok-file-input').click()">📄 Vybrat PDF a nahrát</button>
+      <input type="file" id="dok-file-input" accept="application/pdf" style="display:none" onchange="uploadDokument(this)">
+    </div>
+    <div class="tm-buttons"><button class="btn-secondary" onclick="closeDokumenty()">Zavřít</button></div>
+  </div>
+</div>
+
+<!-- Modal: Zkoušky na stavbě (laboratorní průvodky) -->
+<div class="task-modal" id="zkousky-modal" style="z-index:4600;">
+  <div class="tm-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-right:4px;">
+      <h3 style="flex:1;">🧫 Zkoušky na stavbě</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeZkousky()">✕</button>
+    </div>
+    <button class="btn-primary" style="width:100%;margin:6px 0;" onclick="openZkouskaForm()">➕ Nová zkouška</button>
+    <div id="zk-list" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="tm-buttons"><button class="btn-secondary" onclick="closeZkousky()">Zavřít</button></div>
+  </div>
+</div>
+
+<!-- Modal: formulář zkoušky -->
+<div class="task-modal" id="zkouska-form-modal" style="z-index:4700;">
+  <div class="tm-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding-right:4px;">
+      <h3 style="flex:1;" id="zkf-title">➕ Nová zkouška</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeZkouskaForm()">✕</button>
+    </div>
+    <input type="hidden" id="zkf-id">
+    <label>Název zkoušky *</label>
+    <input class="task-field" id="zkf-nazev" placeholder="např. Statická zatěžovací zkouška, Proctor…">
+    <div class="tf-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Staničení (km)</label><input class="task-field" id="zkf-km" placeholder="0+000"></div>
+      <div style="flex:1;"><label>SO</label><input class="task-field" id="zkf-so" list="zk-so-list" placeholder="SO"><datalist id="zk-so-list"></datalist></div>
+    </div>
+    <div class="tf-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Datum</label><input type="date" class="task-field" id="zkf-datum"></div>
+      <div style="flex:1;"><label>Čas</label><input type="time" class="task-field" id="zkf-cas"></div>
+    </div>
+    <div class="tf-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Technik</label><input class="task-field" id="zkf-technik" placeholder="jméno"></div>
+      <div style="flex:1;"><label>Firma / laboratoř</label><input class="task-field" id="zkf-firma" placeholder="např. Qualiform"></div>
+    </div>
+    <div class="tf-row" style="display:flex;gap:8px;">
+      <div style="flex:1;"><label>Vrstva</label><input class="task-field" id="zkf-vrstva" placeholder="podloží / ŠD / ACP…"></div>
+      <div style="flex:1;"><label>Materiál</label><input class="task-field" id="zkf-material" placeholder="materiál"></div>
+    </div>
+    <label>Výsledek <span style="color:var(--text2);font-weight:400;">(doplní se později)</span></label>
+    <input class="task-field" id="zkf-vysledek" placeholder="vyhověl / nevyhověl / hodnota…">
+    <label>Číslo protokolu <span style="color:var(--text2);font-weight:400;">(doplní se později)</span></label>
+    <input class="task-field" id="zkf-protokol" placeholder="č. protokolu">
+    <div style="font-size:11px;color:var(--text2);margin-top:4px;">📍 Poloha se vezme z GPS (pokud běží) – jinak bez pinu v mapě.</div>
+    <div class="tm-buttons">
+      <button class="btn-primary" onclick="saveZkouska()">💾 Uložit</button>
+      <button class="btn-secondary" onclick="closeZkouskaForm()">Zrušit</button>
     </div>
   </div>
 </div>
