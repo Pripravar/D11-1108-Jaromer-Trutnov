@@ -3197,35 +3197,69 @@ window.addEventListener('load', function() {
 // fotku + svůj Firebase ID token; Cloud Function ověří přihlášení a commitne.
 
 // -- Burn-in metadata do fotky --------
-function burnInMetadata(dataUrl, km, author, callback) {
+// ── Razítko: sdílené pomocníky (SO + kreslení + výběr polí) ─────────
+function _asciiSlug(s){
+  var map={'á':'a','č':'c','ď':'d','é':'e','ě':'e','í':'i','ľ':'l','ň':'n','ó':'o','ř':'r','š':'s','ť':'t','ú':'u','ů':'u','ý':'y','ž':'z'};
+  return String(s||'').replace(/[áčďéěíľňóřšťúůýžÁČĎÉĚÍĽŇÓŘŠŤÚŮÝŽ]/g, function(c){ return map[c.toLowerCase()] || c; }).replace(/[^A-Za-z0-9]+/g,'');
+}
+function _soNameToken(s){ var t=_asciiSlug(s); if(!t) return ''; if(/^\d/.test(t)) t='SO'+t; return t; }
+function _photoSoForName(item){
+  var lst=(item&&item.soList&&item.soList.length)?item.soList:(item&&item.so?[item.so]:[]);
+  var toks=lst.map(_soNameToken).filter(Boolean);
+  return toks.length ? toks.join('-') : '';
+}
+// Popisek SO do razítka: prefix „SO " jen u holého čísla, vlastní názvy (deponie…) beze změny
+function _soStampLabel(item){
+  var lst=(item&&item.soList&&item.soList.length)?item.soList:(item&&item.so?[item.so]:[]);
+  return lst.map(function(s){ s=String(s||'').trim(); if(!s) return ''; return /^\d/.test(s)?('SO '+s):s; }).filter(Boolean).join(' · ');
+}
+// Sestaví řádky razítka podle vybraných polí (fields.* === false = vynechat)
+function _stampLines(item, km, author, dateObj, fields){
+  fields = fields || {};
+  var on = function(k){ return fields[k] !== false; };
+  var lines = [];
+  if(on('so')){ var soTxt=_soStampLabel(item); if(soTxt) lines.push({t:soTxt, bold:true}); }
+  var mid = [];
+  if(on('km') && km && km!=='-') mid.push('km ' + km);
+  var dt = [];
+  if(on('datum')) dt.push(dateObj.toLocaleDateString('cs-CZ'));
+  if(on('cas'))   dt.push(pad2(dateObj.getHours())+':'+pad2(dateObj.getMinutes()));
+  if(dt.length) mid.push(dt.join(' '));
+  if(mid.length) lines.push({t:mid.join('   •   '), bold:false});
+  if(on('jmeno') && author) lines.push({t:author, bold:false, dim:true});
+  return lines;
+}
+// Vykreslí razítkový box (řádky) do pravého spodního rohu
+function _drawStampBox(ctx, img, lines){
+  lines = (lines||[]).filter(function(l){ return l && l.t; });
+  if(!lines.length) return;
+  var fontSize = Math.max(20, Math.round(img.width / 40));
+  var pad = Math.round(fontSize * 0.6);
+  var lineH = Math.round(fontSize * 1.45);
+  var textW = 0;
+  lines.forEach(function(l){ ctx.font=(l.bold?'bold ':'')+fontSize+'px Arial, sans-serif'; textW=Math.max(textW, ctx.measureText(l.t).width); });
+  var boxW = textW + pad*2, boxH = lineH*lines.length + pad;
+  var boxX = img.width - boxW - pad, boxY = img.height - boxH - pad;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
+  else ctx.fillRect(boxX, boxY, boxW, boxH);
+  lines.forEach(function(l, i){
+    ctx.font = (l.bold?'bold ':'')+fontSize+'px Arial, sans-serif';
+    ctx.fillStyle = l.dim ? 'rgba(255,255,255,0.88)' : '#ffffff';
+    ctx.fillText(l.t, boxX + pad, boxY + lineH*(i+0.85));
+  });
+}
+// Razítko při FOCENÍ (dnešní datum/čas). item nese km/author/so/soList.
+function burnInMetadata(dataUrl, km, author, item, callback) {
+  if(typeof item === 'function'){ callback = item; item = {}; }   // zpětná kompat. se starým podpisem
+  item = item || {};
   var img = new Image();
   img.onload = function() {
     var canvas = document.createElement('canvas');
     canvas.width = img.width; canvas.height = img.height;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    var _now = new Date();
-    var dnes = _now.toLocaleDateString('cs-CZ') + ' ' + pad2(_now.getHours()) + ':' + pad2(_now.getMinutes());
-    var line1 = 'km ' + (km || '-') + '   •   ' + dnes;
-    var line2 = author || '';
-    var fontSize = Math.max(20, Math.round(img.width / 40));
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    var pad = Math.round(fontSize * 0.6);
-    var lineH = Math.round(fontSize * 1.45);
-    var textW = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
-    var boxW = textW + pad * 2;
-    var boxH = lineH * 2 + pad;
-    var boxX = img.width - boxW - pad;
-    var boxY = img.height - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
-    else { ctx.fillRect(boxX, boxY, boxW, boxH); }
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    ctx.fillText(line1, boxX + pad, boxY + lineH * 0.85);
-    ctx.font = fontSize + 'px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(line2, boxX + pad, boxY + lineH * 1.88);
+    _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', new Date(), null));
     callback(canvas.toDataURL('image/jpeg', 0.88));
   };
   img.src = dataUrl;
@@ -3277,8 +3311,8 @@ function uploadPhotosToGitHub(items, onProgress, onDone, meta) {
         idx++; next();
       });
     }
-    if(meta && (meta.km || meta.author)) {
-      burnInMetadata(src, meta.km, meta.author, doUpload);
+    if(meta && (meta.km || meta.author || meta.so || (meta.soList && meta.soList.length))) {
+      burnInMetadata(src, meta.km, meta.author, meta, doUpload);
     } else { doUpload(src); }
   }
   next();
@@ -3649,14 +3683,20 @@ function _authorInitials(name){
   var s = String(name).toLowerCase().replace(/[áčďéěíľňóřšťúůýž]/g, function(c){ return map[c] || c; });
   return s.trim().split(/\s+/).filter(Boolean).map(function(p){ return p.charAt(0).toUpperCase(); }).join('').replace(/[^A-Z]/g,'');
 }
-function photoFilename(item, idx) {
+// Název souboru zrcadlí zaškrtnutá pole razítka: D11_SO129_2026-07-08_0948_km129+300_OS.jpg
+// Pořadí: D11 · SO · datum · čas · staničení(km) · iniciály. fields.* === false = vynechat.
+function photoFilename(item, idx, fields) {
   var d = photoCreationDate(item);
-  var base = 'stavba_' + d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate())
-           + '_' + pad2(d.getHours()) + pad2(d.getMinutes());
-  if(item && item.km) base += '_km' + String(item.km).replace(/\s+/g,'').replace(/[^\w+\-.]/g,'');
-  if(item && item.author){ var ini = _authorInitials(item.author); if(ini) base += '_' + ini; }
-  if(typeof idx === 'number') base += '_' + (idx+1);
-  return base + '.jpg';
+  var on = function(k){ return !fields || fields[k] !== false; };
+  var parts = ['D11'];
+  if(on('so')){ var so = _photoSoForName(item); if(so) parts.push(so); }
+  if(on('datum')) parts.push(d.getFullYear() + '-' + pad2(d.getMonth()+1) + '-' + pad2(d.getDate()));
+  if(on('cas'))   parts.push(pad2(d.getHours()) + pad2(d.getMinutes()));
+  if(on('km') && item && item.km) parts.push('km' + String(item.km).replace(/\s+/g,'').replace(/[^\w+\-.]/g,''));
+  if(on('jmeno') && item && item.author){ var ini = _authorInitials(item.author); if(ini) parts.push(ini); }
+  if(typeof idx === 'number') parts.push(String(idx+1));
+  if(parts.length === 1) parts.push(String(d.getTime()));   // fallback proti kolizím
+  return parts.join('_') + '.jpg';
 }
 
 // piexif datum formát "YYYY:MM:DD HH:MM:SS"
@@ -3707,11 +3747,10 @@ function setExifCreationDate(jpegDataUrl, date) {
 //   stampChoice = false → chce verzi BEZ razítka
 // Když je k dispozici přímo požadovaná verze (nové fotky), použijeme ji a needsBurn=false.
 // Když není (staré fotky bez dvojí verze) → fallback na item.url + burn jen u stampChoice=true.
-function _chooseDownloadUrl(item, stampChoice) {
+function _chooseDownloadUrl(item, stampChoice, fields) {
   if(stampChoice === true) {
-    if(item.urlStamped) return { url: item.urlStamped, needsBurn: false };
-    // Staré fotky: vypaluje se za běhu (může mít dvojí razítko, pokud bylo už při focení)
-    return { url: item.url, needsBurn: true };
+    // Vždy dovypálit z ORIGINÁLU podle vybraných polí (pre-baked razítko z focení nemusí sedět s výběrem)
+    return { url: item.urlOriginal || item.url, needsBurn: true };
   }
   if(stampChoice === false) {
     if(item.urlOriginal) return { url: item.urlOriginal, needsBurn: false };
@@ -3727,7 +3766,7 @@ function _chooseDownloadUrl(item, stampChoice) {
 function preparePhotoBlobForDownload(item, opts) {
   opts = opts || {};
   var d = photoCreationDate(item);
-  var choice = _chooseDownloadUrl(item, opts.stamp);
+  var choice = _chooseDownloadUrl(item, opts.stamp, opts.fields);
   return fetchPhotoAsBlob(choice.url).then(function(blob){
     // Jen JPEG dokážeme upravit EXIF, jinak stáhneme tak jak je
     if(blob.type && blob.type.indexOf('jpeg') === -1 && blob.type.indexOf('jpg') === -1) {
@@ -3743,9 +3782,9 @@ function preparePhotoBlobForDownload(item, opts) {
         return new Blob([ab], { type:'image/jpeg' });
       }
       if(choice.needsBurn) {
-        // Fallback pro staré fotky - dovypálíme razítko za běhu (datem pořízení)
+        // Vypálit razítko za běhu (datum pořízení + vybraná pole SO/km/datum/čas/jméno)
         return new Promise(function(resolve){
-          burnInMetadataWithDate(dataUrl, item.km || '-', item.author || '', d, function(stampedDataUrl){
+          burnInMetadataWithDate(dataUrl, item.km || '-', item.author || '', d, item, opts.fields, function(stampedDataUrl){
             resolve(continueWithExif(stampedDataUrl));
           });
         });
@@ -3759,34 +3798,18 @@ function preparePhotoBlobForDownload(item, opts) {
 function srcOrDataUrl(x) { return x; }
 
 // Varianta burnInMetadata s explicitním datem (ne new Date()). Razítko ukáže datum pořízení.
-function burnInMetadataWithDate(dataUrl, km, author, dateObj, callback) {
+// Razítko s explicitním datem pořízení + volitelnými poli (SO/km/datum/čas/jméno).
+// Podpisy: (dataUrl, km, author, dateObj, item, fields, callback) i starý (…, dateObj, callback).
+function burnInMetadataWithDate(dataUrl, km, author, dateObj, item, fields, callback) {
+  if(typeof item === 'function'){ callback = item; item = {}; fields = null; }
+  item = item || {};
   var img = new Image();
   img.onload = function() {
     var canvas = document.createElement('canvas');
     canvas.width = img.width; canvas.height = img.height;
     var ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    var dStr = dateObj.toLocaleDateString('cs-CZ') + ' ' + pad2(dateObj.getHours()) + ':' + pad2(dateObj.getMinutes());
-    var line1 = 'km ' + (km || '-') + '   •   ' + dStr;
-    var line2 = author || '';
-    var fontSize = Math.max(20, Math.round(img.width / 40));
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    var pad = Math.round(fontSize * 0.6);
-    var lineH = Math.round(fontSize * 1.45);
-    var textW = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
-    var boxW = textW + pad * 2;
-    var boxH = lineH * 2 + pad;
-    var boxX = img.width - boxW - pad;
-    var boxY = img.height - boxH - pad;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    if(ctx.roundRect) { ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
-    else { ctx.fillRect(boxX, boxY, boxW, boxH); }
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold ' + fontSize + 'px Arial, sans-serif';
-    ctx.fillText(line1, boxX + pad, boxY + lineH * 0.85);
-    ctx.font = fontSize + 'px Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
-    ctx.fillText(line2, boxX + pad, boxY + lineH * 1.88);
+    _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', dateObj, fields));
     callback(canvas.toDataURL('image/jpeg', 0.9));
   };
   img.onerror = function(){ callback(dataUrl); }; // při selhání vrátí beze změny
@@ -3811,11 +3834,24 @@ function askDownloadStampChoice(photoCount, opts) {
     modal.style.display = 'flex';
   });
 }
+function _cbChecked(id){ var e=document.getElementById(id); return e ? e.checked : true; }
 function _resolveStampChoice(choice) {
   var modal = document.getElementById('dl-stamp-modal');
   if(modal) modal.style.display = 'none';
+  var result;
+  if(choice === null){ result = null; }   // Zrušit
+  else {
+    // choice true = s razítkem, false = bez razítka. Pole platí pro razítko I název souboru.
+    result = { stamp: choice === true, fields: {
+      so:    _cbChecked('dlsm-f-so'),
+      km:    _cbChecked('dlsm-f-km'),
+      datum: _cbChecked('dlsm-f-datum'),
+      cas:   _cbChecked('dlsm-f-cas'),
+      jmeno: _cbChecked('dlsm-f-jmeno')
+    }};
+  }
   if(typeof _stampChoiceResolver === 'function') {
-    var r = _stampChoiceResolver; _stampChoiceResolver = null; r(choice);
+    var r = _stampChoiceResolver; _stampChoiceResolver = null; r(result);
   }
 }
 
@@ -3845,13 +3881,15 @@ function downloadCurrentFsPhoto() {
   });
 }
 
-function _doDownloadCurrentFsPhoto(item, applyStamp) {
+function _doDownloadCurrentFsPhoto(item, choice) {
+  var applyStamp = choice && choice.stamp === true;
+  var fields = (choice && choice.fields) || null;
   showSync('⏳ Připravuji fotku...');
-  preparePhotoBlobForDownload(item, { stamp: applyStamp })
+  preparePhotoBlobForDownload(item, { stamp: applyStamp, fields: fields })
     .then(function(blob){
       hideSync();
       var d = photoCreationDate(item);
-      var name = photoFilename(item);
+      var name = photoFilename(item);   // název VŽDY plný (nezávislý na výběru razítka)
       var file;
       try { file = new File([blob], name, { type:'image/jpeg', lastModified:d.getTime() }); }
       catch(e) { file = null; }
@@ -3954,7 +3992,10 @@ function _sequentialDownloadFiles(files) {
 
 // Sdílená příprava: vybrané fotky → pole File[] s EXIF datem a správnými jmény.
 // Vrací Promise<{files: File[], failed: number, total: number}>.
-function _prepareSelectedPhotosAsFiles(applyStamp) {
+function _prepareSelectedPhotosAsFiles(choice) {
+  // choice = {stamp, fields} z dialogu (nebo starý bool). Objekt předávej dál – ne !!coerce (zahodí fields).
+  var applyStamp = (choice && typeof choice === 'object') ? (choice.stamp === true) : !!choice;
+  var fields = (choice && typeof choice === 'object') ? choice.fields : null;
   var items = Object.values(gallerySelectedKeys);
   var total = items.length;
   var done = 0, failed = 0;
@@ -3962,11 +4003,11 @@ function _prepareSelectedPhotosAsFiles(applyStamp) {
 
   showSync('⏳ Připravuji 0/' + total + '...');
   var filePromises = items.map(function(it, idx) {
-    return preparePhotoBlobForDownload(it, { stamp: !!applyStamp }).then(function(blob){
+    return preparePhotoBlobForDownload(it, { stamp: applyStamp, fields: fields }).then(function(blob){
       done++;
       showSync('⏳ Připravuji ' + done + '/' + total + '...');
       var d = photoCreationDate(it);
-      var name = photoFilename(it, total > 1 ? idx : undefined);
+      var name = photoFilename(it, total > 1 ? idx : undefined);   // název VŽDY plný
       try {
         return new File([blob], name, { type: 'image/jpeg', lastModified: d.getTime() });
       } catch(e) {
@@ -6065,7 +6106,7 @@ function _updateUploadBadge(){
 // Uploady jdou SEKVENČNĚ (GitHub neumí paralelní PUT do stejné větve – jinak 409).
 function _processPhotoJob(job, done){
   var compressed = job.compressed, meta = job.meta, yes = job.stamp, t = job.ts;
-  burnInMetadata(compressed, meta.km, meta.author, function(stampedDataUrl){
+  burnInMetadata(compressed, meta.km, meta.author, meta, function(stampedDataUrl){
     var fnOrig  = 'standalone/foto_' + t + '_o.jpg';
     var fnStamp = 'standalone/foto_' + t + '_s.jpg';
     var fnThumb = 'standalone/foto_' + t + '_t.jpg';
@@ -11681,13 +11722,21 @@ function copyDiaryExport(){
 <!-- Modal: volba razítka při stažení - z-index vyšší než galerie (4800) i fullscreen foto (5000) -->
 <div id="dl-stamp-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:20px;">
   <div style="background:var(--panel);border-radius:14px;padding:22px 18px;width:min(92vw,380px);display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 28px rgba(0,0,0,0.5);">
-    <div id="dlsm-title" style="font-size:16px;font-weight:700;color:var(--text);text-align:center;line-height:1.4;">🏷️ Vypálit razítko při stažení?</div>
-    <div style="font-size:11px;color:var(--text2);text-align:center;">km + datum + jméno do pravého spodního rohu</div>
+    <div id="dlsm-title" style="font-size:16px;font-weight:700;color:var(--text);text-align:center;line-height:1.4;">🏷️ Razítko při stažení?</div>
+    <div style="font-size:11px;color:var(--text2);text-align:center;">Vyber, co se vypálí do fotky (název souboru je vždy plný):</div>
+    <div id="dlsm-fields" style="display:flex;flex-direction:column;gap:7px;margin:8px 2px 2px;">
+      <label style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);cursor:pointer;"><input type="checkbox" id="dlsm-f-so"    checked style="width:19px;height:19px;"> 🏗️ SO (stavební objekt)</label>
+      <label style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);cursor:pointer;"><input type="checkbox" id="dlsm-f-datum" checked style="width:19px;height:19px;"> 📅 Datum</label>
+      <label style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);cursor:pointer;"><input type="checkbox" id="dlsm-f-cas"   checked style="width:19px;height:19px;"> 🕒 Čas</label>
+      <label style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);cursor:pointer;"><input type="checkbox" id="dlsm-f-km"    checked style="width:19px;height:19px;"> 📏 Staničení (km)</label>
+      <label style="display:flex;align-items:center;gap:9px;font-size:14px;color:var(--text);cursor:pointer;"><input type="checkbox" id="dlsm-f-jmeno" checked style="width:19px;height:19px;"> 👤 Jméno (iniciály)</label>
+    </div>
+    <div style="font-size:10px;color:var(--text2);text-align:center;">Název souboru vždy: <span style="color:var(--accent2);">D11_SO…_datum_čas_km_OS.jpg</span></div>
     <div id="dlsm-warning" style="display:none;font-size:11px;color:var(--accent2);text-align:center;background:rgba(245,166,35,0.1);padding:6px 8px;border-radius:6px;line-height:1.35;">
       ⚠ Pokud fotka už při focení byla orazítkovaná, dostane další razítko navíc.
     </div>
-    <button id="dlsm-yes" class="pp-btn pp-yes" onclick="_resolveStampChoice(true)" style="margin-top:6px;">🏷️ Ano, s razítkem</button>
-    <button id="dlsm-no"  class="pp-btn pp-no"  onclick="_resolveStampChoice(false)">📷 Ne, jak je</button>
+    <button id="dlsm-yes" class="pp-btn pp-yes" onclick="_resolveStampChoice(true)" style="margin-top:6px;">🏷️ Stáhnout S razítkem</button>
+    <button id="dlsm-no"  class="pp-btn pp-no"  onclick="_resolveStampChoice(false)">📷 Bez razítka (čistá fotka, název zůstává)</button>
     <button id="dlsm-cancel" style="background:transparent;color:var(--text2);border:none;font-size:13px;cursor:pointer;padding:6px;" onclick="_resolveStampChoice(null)">Zrušit</button>
   </div>
 </div>
