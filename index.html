@@ -2553,6 +2553,7 @@ function init() {
   _loadVykRevize();   // revize/zneplatnění výkresů (verzování)
   loadMereni();       // týmová měření (délka/plocha)
   loadCustomSO();     // vlastní objekty (deponie, ZS) pro výběr SO u fotek
+  loadCategoryPerms(); // výchozí práva kategorií (sub/investor)
   initLongPress();
   // Zastavit touch eventy z panelů aby nešly do Leaflet mapy
   ['pdf-panel','prop-panel'].forEach(function(id) {
@@ -6595,19 +6596,41 @@ var FEATURES = [
   {key:'kvalita',    label:'Kvalita / KZP',           btns:['btn-kzp']},
   {key:'geo',        label:'Geotechnika',             btns:['btn-geo']}
 ];
-// „Fotí jako subka" = subdodavatel s přístupem JEN k focení + galerii (login-based).
-function isSubOnly(uid){
-  var u = uid || (window.currentUser && window.currentUser.uid);
-  if(isAdmin(u)) return false;
-  return !!(u && window.allUsers[u] && window.allUsers[u].subOnly === true);
+// ── Kategorie práv: 'silnice' (náš tým M-SILNICE) / 'sub' (subdodavatel) / 'investor' ──
+// silnice = vidí vše (jednotlivce lze omezit override). sub/investor = deny-by-default,
+// povoleno jen co je ve výchozích právech kategorie (/nastaveni/kategorie_prava) NEBO per-user override.
+var DEFAULT_CATEGORY_PERMS = { sub: { foto:true, galerie:true }, investor: { foto:true, galerie:true } };
+var categoryPerms = {};   // z /nastaveni/kategorie_prava (živě)
+function loadCategoryPerms(){
+  if(typeof db === 'undefined') return;
+  db.ref('nastaveni/kategorie_prava').on('value', function(s){ categoryPerms = s.val() || {}; applyPermsToUI(); });
 }
+function userCategory(uid){
+  var u = uid || (window.currentUser && window.currentUser.uid);
+  var uu = u && window.allUsers[u];
+  if(uu && uu.kategorie) return uu.kategorie;
+  if(uu && uu.subOnly === true) return 'sub';   // fallback pro staré účty
+  return 'silnice';
+}
+function isSubOnly(uid){ return userCategory(uid) === 'sub'; }
+function isInvestorOnly(uid){ return userCategory(uid) === 'investor'; }
+function isRestrictedCategory(uid){ var c = userCategory(uid); return c === 'sub' || c === 'investor'; }
+// Výchozí právo kategorie na funkci (silnice=vše; sub/investor jen dle nastavení/DEFAULT)
+function categoryAllows(cat, feature){
+  if(cat === 'silnice') return true;
+  var cp = categoryPerms[cat];
+  if(cp && cp[feature] !== undefined) return cp[feature] === true;
+  var d = DEFAULT_CATEGORY_PERMS[cat];
+  return !!(d && d[feature] === true);
+}
+// Efektivní právo. Pořadí: admin > per-user override (perms) > kategorie.
 function hasPerm(f){
   if(isAdmin()) return true;
   var me = window.currentUser && window.currentUser.uid;
   if(!me || isBlocked(me)) return false;
-  if(isSubOnly(me) && f !== 'foto' && f !== 'galerie') return false;  // subka: tvrdě jen focení + galerie
   var u = window.allUsers[me];
-  return !(u && u.perms && u.perms[f] === false);   // allow-by-default
+  if(u && u.perms && (u.perms[f] === true || u.perms[f] === false)) return u.perms[f];   // per-user výjimka
+  return categoryAllows(userCategory(me), f);
 }
 function applyPermsToUI(){
   FEATURES.forEach(function(f){
@@ -6673,18 +6696,20 @@ function renderUserAdmin(){
       html += '<button onclick="uaAdmin(\'' + uid + '\',' + (adm?'false':'true') + ')" style="background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;">' + (adm?'⭐ Odebrat admina':'⭐ Udělat adminem') + '</button>';
       html += '</div>';
       if(!adm){
-        var sub = (u.subOnly === true);
-        html += '<label style="margin-top:8px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;background:rgba(230,126,34,0.12);border:1px solid #e67e22;border-radius:8px;padding:7px 10px;"><input type="checkbox"' + (sub?' checked':'') + ' onchange="uaSubOnly(\'' + uid + '\',this.checked)"> 📷 Fotí jako subka (jen focení + galerie)</label>';
-        if(sub){
-          html += '<div style="margin-top:6px;font-size:11px;color:var(--text2);">Režim subky – ostatní práva se ignorují (má tvrdě jen focení a galerii).</div>';
-        } else {
-          html += '<div style="margin-top:8px;font-size:11px;color:var(--text2);">Povolené funkce:</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">';
-          FEATURES.forEach(function(f){
-            var allowed = !(u.perms && u.perms[f.key] === false);
-            html += '<label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox"' + (allowed?' checked':'') + ' onchange="uaPerm(\'' + uid + '\',\'' + f.key + '\',this.checked)"> ' + escapeHtml(f.label) + '</label>';
-          });
-          html += '</div>';
-        }
+        var cat = userCategory(uid);
+        html += '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:12px;color:var(--text2);">Kategorie:</span>'+
+          '<select onchange="setUserCategory(\'' + uid + '\',this.value)" style="background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 8px;font-size:12px;">'+
+          '<option value="silnice"'+(cat==='silnice'?' selected':'')+'>🛣️ M-SILNICE (náš tým)</option>'+
+          '<option value="sub"'+(cat==='sub'?' selected':'')+'>📷 Subdodavatel</option>'+
+          '<option value="investor"'+(cat==='investor'?' selected':'')+'>🏛️ Investor/objednatel</option>'+
+          '</select></div>';
+        html += '<div style="margin-top:8px;font-size:11px;color:var(--text2);">Povolené funkce'+(cat==='silnice'?' (výchozí vše, můžeš ubrat)':' (výchozí dle kategorie · <span style="color:#e67e22;">•</span> = ruční výjimka)')+':</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;">';
+        FEATURES.forEach(function(f){
+          var eff = _userPermEffective(u, f.key);
+          var over = (u.perms && (u.perms[f.key]===true || u.perms[f.key]===false));
+          html += '<label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox"' + (eff?' checked':'') + ' onchange="toggleUserPerm(\'' + uid + '\',\'' + f.key + '\',this.checked)"> ' + escapeHtml(f.label) + (over?' <span style="color:#e67e22;">•</span>':'') + '</label>';
+        });
+        html += '</div>';
       }
     } else {
       html += '<div style="font-size:11px;color:var(--text2);margin-top:6px;">(to jsi ty – sebe nelze blokovat/odadminovat)</div>';
@@ -6705,13 +6730,23 @@ function uaAdmin(uid, mk){
     .then(function(){ showToast(mk ? '⭐ Admin přidán' : 'Admin odebrán', 1800); })
     .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
 }
-function uaPerm(uid, key, allowed){
-  db.ref('uzivatele/' + uid + '/perms/' + key).set(allowed ? null : false)
+// Efektivní právo uživatele pro admin UI (override > kategorie)
+function _userPermEffective(u, feature){
+  if(u.perms && (u.perms[feature] === true || u.perms[feature] === false)) return u.perms[feature];
+  var cat = u.kategorie || (u.subOnly === true ? 'sub' : 'silnice');
+  return categoryAllows(cat, feature);
+}
+function setUserCategory(uid, cat){
+  db.ref('uzivatele/' + uid).update({ kategorie: cat, subOnly: null })
+    .then(function(){ showToast('Kategorie: ' + cat, 1600); renderUserAdmin(); })
     .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
 }
-function uaSubOnly(uid, on){
-  db.ref('uzivatele/' + uid + '/subOnly').set(on ? true : null)
-    .then(function(){ showToast(on ? '📷 Nastaveno: fotí jako subka' : 'Režim subky zrušen', 2000); renderUserAdmin(); })
+// Smart override – ulož jen když se liší od kategorie; shodné → null (dědí kategorii)
+function toggleUserPerm(uid, feature, checked){
+  var u = window.allUsers[uid] || {};
+  var cat = u.kategorie || (u.subOnly === true ? 'sub' : 'silnice');
+  var val = (checked === categoryAllows(cat, feature)) ? null : checked;
+  db.ref('uzivatele/' + uid + '/perms/' + feature).set(val)
     .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
 }
 
