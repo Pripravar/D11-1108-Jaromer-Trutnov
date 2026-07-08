@@ -1213,7 +1213,7 @@ document.addEventListener('touchend', function(e){
   </div>
   <div class="layer-row">
     <label>✅ Úkoly</label>
-    <label class="toggle"><input type="checkbox" id="lyr-tasks" checked onchange="toggleTasksLayer(this.checked)"><span class="toggle-slider"></span></label>
+    <label class="toggle"><input type="checkbox" id="lyr-tasks" onchange="toggleTasksLayer(this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <div class="layer-sub" id="sub-tasks">
   <div class="layer-row" style="padding-left:12px;">
@@ -1247,7 +1247,7 @@ document.addEventListener('touchend', function(e){
   </div>
   <div class="layer-row">
     <label>📏 Měření (tým)</label>
-    <label class="toggle"><input type="checkbox" id="lyr-mereni" checked onchange="setMereniVisible(this.checked)"><span class="toggle-slider"></span></label>
+    <label class="toggle"><input type="checkbox" id="lyr-mereni" onchange="setMereniVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
   <div class="layer-row">
     <label>🧫 Zkoušky na stavbě</label>
@@ -8422,7 +8422,7 @@ function addComment() {
 
 // ── ÚKOLY: vrstva na mapě ───────────────────────────────────────────
 window.tasksLayer = null;
-window.tasksLayerVisible = true;
+window.tasksLayerVisible = false;   // start: čistá mapa bez úkolů (zapneš vrstvou / uložíš vlastní výchozí)
 window.taskSubLayers = {open: true, done: false};
 
 function renderTasksOnMap() {
