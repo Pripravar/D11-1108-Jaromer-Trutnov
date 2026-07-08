@@ -6445,6 +6445,19 @@ function _galleryItemEl(item) {
   meta.className = 'gallery-item-meta';
   meta.textContent = (item.km ? 'km ' + item.km : '') + (item.km && (item.date || item.author) ? ' • ' : '') + (item.date || '') + (item.date && item.author ? ' • ' : '') + (item.author || '');
   div.appendChild(meta);
+  // Indikátor sdílení: 👷 zeleně = sdíleno SUB, 🏛️ fialově = sdíleno investorovi
+  var shareIcons = [];
+  if(item.sdilenoSub)      shareIcons.push({icon:'👷', col:'#16a34a'});
+  if(item.sdilenoInvestor) shareIcons.push({icon:'🏛️', col:'#8b5cf6'});
+  if(shareIcons.length){
+    div.style.boxShadow = 'inset 0 0 0 3px ' + shareIcons[shareIcons.length-1].col;   // fialová (investor) přebíjí
+    var sb = document.createElement('div');
+    sb.style.cssText = 'position:absolute;top:3px;left:3px;display:flex;gap:2px;z-index:2;pointer-events:none;';
+    sb.innerHTML = shareIcons.map(function(s){
+      return '<span style="background:'+s.col+';color:#fff;border-radius:50%;width:17px;height:17px;display:flex;align-items:center;justify-content:center;font-size:10px;box-shadow:0 1px 2px rgba(0,0,0,.5);">'+s.icon+'</span>';
+    }).join('');
+    div.appendChild(sb);
+  }
   return div;
 }
 
