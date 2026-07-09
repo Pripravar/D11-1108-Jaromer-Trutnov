@@ -3423,7 +3423,7 @@ function saveNote() {
   var stanicStr = stanicEl ? (stanicEl.value || '').trim() : '';
   if(stanicStr){
     var rk = parseKmStr(stanicStr);
-    if(rk === null){ showToast('Neplatné staničení – zadej např. 1+250', 2800); return; }
+    if(rk === null){ showToast('Neplatné staničení – např. 1+250, 130,350 nebo rozsah 130,350–130,500', 3200); return; }
     var ll = realKmToLatLng(rk);
     if(!ll){ showToast('Staničení je mimo trasu', 2800); return; }
     newNoteLat = ll[0]; newNoteLng = ll[1];
@@ -3437,6 +3437,7 @@ function saveNote() {
   function finish(uploadedUrls) {
     var note = { id:noteId, lat:newNoteLat, lng:newNoteLng, cat:newNoteCat,
       author:author, nazev:nazev, text:text,
+      stanic:(stanicStr || null),
       uid:(window.currentUser ? window.currentUser.uid : null),
       photos:keepUrls.concat(uploadedUrls), time:new Date().toLocaleString('cs-CZ') };
     saveNote_toFirebase(note, null);
@@ -6432,13 +6433,27 @@ function switchGalleryTab(tab) {
   renderGallery();
 }
 
-// Parse km string "0+150" → 0.150. Vrací null pokud nejde parsovat.
+// Parse staničení → číslo km. Zvládá:
+//   "0+150" (inženýrský zápis) → 0.150
+//   "130,350" / "130.35" (desetinný) → 130.35
+//   "130" (celé km) → 130
+//   ROZSAH "od–do" ("129+300-129+500", "130,350 až 130,500", "od … do …")
+//        → vezme PRVNÍ (od) hodnotu, na tu se umístí bod na mapě.
+// Vrací null, když nejde parsovat.
 function parseKmStr(s){
-  if(!s) return null;
-  if(typeof s === 'number') return s;
-  var m = String(s).match(/(\d+)\+(\d+)/);
-  if(!m) return null;
-  return parseInt(m[1], 10) + parseInt(m[2], 10) / Math.pow(10, m[2].length);
+  if(s === null || s === undefined) return null;
+  if(typeof s === 'number') return isNaN(s) ? null : s;
+  var str = String(s).trim();
+  if(!str) return null;
+  // Rozsah: rozděl na pomlčce/„až"/„do" (NE na „+“, to je součást zápisu km). Vezmi 1. část.
+  var first = str.split(/\s*(?:[-–—]|až|\bdo\b)\s*/i)[0].trim() || str;
+  // Inženýrský zápis "129+300"
+  var m = first.match(/(\d+)\s*\+\s*(\d+)/);
+  if(m) return parseInt(m[1], 10) + parseInt(m[2], 10) / Math.pow(10, m[2].length);
+  // Desetinný / celé km "130,350" | "130.35" | "130"
+  var d = first.replace(',', '.').match(/\d+(?:\.\d+)?/);
+  if(d){ var v = parseFloat(d[0]); return isNaN(v) ? null : v; }
+  return null;
 }
 
 // Vrací 'YYYY-MM-DD' z různých formátů (date string "12.5.2026", ts, time string)
@@ -8211,6 +8226,7 @@ function openNewTaskModal(lat, lng, km) {
   document.getElementById('tnm-prof').value = '';
   document.getElementById('tnm-so').value = '';
   _fillTaskSoDatalist();
+  var _tsn0 = document.getElementById('tnm-stanic'); if(_tsn0) _tsn0.value = '';
   var _tst0 = document.getElementById('tnm-stamp-toggle'); if(_tst0) _tst0.checked = getStampPref();
   renderTnmPhotos();
   document.getElementById('tnm-lat').value = (lat !== null && lat !== undefined) ? lat : '';
@@ -8481,6 +8497,17 @@ function saveTaskFromForm() {
   var lng = parseFloat(document.getElementById('tnm-lng').value);
   var km  = parseFloat(document.getElementById('tnm-km').value);
 
+  // Staničení (i rozsah od–do): pokud je vyplněné, určí místo na mapě (přepíše bod z mapy).
+  var _tskStanicEl = document.getElementById('tnm-stanic');
+  var taskStanic = _tskStanicEl ? (_tskStanicEl.value || '').trim() : '';
+  if(taskStanic){
+    var _trk = parseKmStr(taskStanic);
+    if(_trk === null){ showToast('Neplatné staničení – např. 1+250, 130,350 nebo rozsah 130,350–130,500', 3200); return; }
+    var _tll = realKmToLatLng(_trk);
+    if(!_tll){ showToast('Staničení je mimo trasu', 2800); return; }
+    lat = _tll[0]; lng = _tll[1]; km = _trk;   // umístí bod na „od" staničení
+  }
+
   var id, existing = null;
   if(window.editingTaskId) {
     id = window.editingTaskId;
@@ -8505,6 +8532,7 @@ function saveTaskFromForm() {
       priorita:   priority,
       profese:    profese,
       so:         taskSO,
+      stanic:     taskStanic || null,
       stav:       existing ? existing.stav : 'open',
       vytvoreno:  existing ? existing.vytvoreno : Date.now(),
       upraveno:   Date.now(),
@@ -8676,6 +8704,7 @@ function editTask() {
   document.getElementById('tnm-prof').value = t.profese || '';
   document.getElementById('tnm-so').value = t.so || '';
   _fillTaskSoDatalist();
+  var _tsnE = document.getElementById('tnm-stanic'); if(_tsnE) _tsnE.value = t.stanic || '';
   var _tstE = document.getElementById('tnm-stamp-toggle'); if(_tstE) _tstE.checked = getStampPref();
   document.getElementById('tnm-lat').value = (t.lat !== undefined && t.lat !== null) ? t.lat : '';
   document.getElementById('tnm-lng').value = (t.lng !== undefined && t.lng !== null) ? t.lng : '';
@@ -11494,7 +11523,7 @@ function copyDiaryExport(){
       <div class="note-cat nc-6" data-cat="6" onclick="selectCat(6)" ondblclick="promptCat6()">🏷️ Vlastní</div>
     </div>
     <input id="note-nazev" class="note-field" type="text" placeholder="📛 Název (nepovinný)" maxlength="60" style="font-weight:600;">
-    <input id="note-stanic" class="note-field" type="text" placeholder="📍 Staničení (např. 1+250) – umístí na mapu" maxlength="12" inputmode="text">
+    <input id="note-stanic" class="note-field" type="text" placeholder="📍 Staničení (1+250, 130,350, i rozsah od–do) – umístí na mapu" maxlength="30" inputmode="text">
     <input id="note-author" class="note-field" type="text" placeholder="Vaše jméno *" maxlength="40">
     <textarea id="note-text" class="note-field" placeholder="Text poznámky..."></textarea>
     <div id="note-photos-preview" class="note-photos-preview"></div>
@@ -12084,6 +12113,9 @@ function copyDiaryExport(){
     <select class="task-field" id="tnm-assignee-pick" onchange="addAssigneeFromPick()">
       <option value="">+ Vyber osobu…</option>
     </select>
+
+    <label>📍 Staničení (volitelně)</label>
+    <input type="text" class="task-field" id="tnm-stanic" placeholder="1+250, 130,350, i rozsah od–do – umístí na mapu" maxlength="30">
 
     <label id="tnm-loc-label" style="display:none;">📍 Lokace</label>
     <div id="tnm-loc-info" style="font-size:12px;color:var(--accent2);display:none;"></div>
