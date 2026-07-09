@@ -1275,7 +1275,7 @@ document.addEventListener('touchend', function(e){
     </div>
   </div>
   <div class="layer-row" data-perm="foto">
-    <label>🏷️ Razítko (km, datum, jméno)</label>
+    <label>🏷️ Razítko (SO, km, datum, čas, jméno)</label>
     <label class="toggle"><input type="checkbox" id="lyr-stamp" onchange="onStampToggle(this.checked)"><span class="toggle-slider"></span></label>
   </div>
 </div>
@@ -3133,7 +3133,7 @@ function getStampPref() {
 function setStampPref(bool) {
   localStorage.setItem('foto_razitko', bool ? '1' : '0');
   // synchronizuj všechny toggle elementy
-  ['lyr-stamp','note-stamp-toggle','edit-stamp-toggle'].forEach(function(id){
+  ['lyr-stamp','note-stamp-toggle','edit-stamp-toggle','tnm-stamp-toggle'].forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.checked = !!bool;
   });
@@ -3412,9 +3412,13 @@ function saveNote() {
   var stampToggle = document.getElementById('note-stamp-toggle');
   var useStamp = stampToggle ? stampToggle.checked : getStampPref();
   setStampPref(useStamp);
-  var metaKm = null;
+  var metaKm = null, metaSoList = [];
   if(useStamp && newNoteLat && newNoteLng) {
-    try { metaKm = fmtKm(gpxCumToRealKm(nearestOnRoute(newNoteLat, newNoteLng).cum)); } catch(e){}
+    try {
+      var _rk = gpxCumToRealKm(nearestOnRoute(newNoteLat, newNoteLng).cum);
+      metaKm = fmtKm(_rk);
+      metaSoList = soKandidati(_rk).slice(0,1).map(function(o){ return o.id; });   // SO do razítka: nejbližší objekt (auto podle staničení)
+    } catch(e){}
   }
   closeNoteModal();
   if(toUpload.length === 0) { finish([]); }
@@ -3423,7 +3427,7 @@ function saveNote() {
     uploadPhotosToGitHub(toUpload,
       function(done,total){ showSync('⏳ Nahrávám fotky (' + done + '/' + total + ')...'); },
       function(urls){ finish(urls); },
-      useStamp ? {km: metaKm, author: author} : null);
+      useStamp ? {km: metaKm, author: author, soList: metaSoList} : null);
   }
 }
 
@@ -4349,9 +4353,13 @@ function saveEditNote() {
   var editStampToggle = document.getElementById('edit-stamp-toggle');
   var editUseStamp = editStampToggle ? editStampToggle.checked : getStampPref();
   setStampPref(editUseStamp);
-  var editMetaKm = null;
+  var editMetaKm = null, editMetaSoList = [];
   if(editUseStamp && note && note.lat && note.lng) {
-    try { editMetaKm = fmtKm(gpxCumToRealKm(nearestOnRoute(note.lat, note.lng).cum)); } catch(e){}
+    try {
+      var _erk = gpxCumToRealKm(nearestOnRoute(note.lat, note.lng).cum);
+      editMetaKm = fmtKm(_erk);
+      editMetaSoList = soKandidati(_erk).slice(0,1).map(function(o){ return o.id; });   // SO do razítka: nejbližší objekt (auto podle staničení)
+    } catch(e){}
   }
   closeEditModal();
   if(toUpload.length === 0) { finish([]); }
@@ -4360,7 +4368,7 @@ function saveEditNote() {
     uploadPhotosToGitHub(toUpload,
       function(done,total){ showSync('⏳ Nahrávám fotky (' + done + '/' + total + ')...'); },
       function(urls){ finish(urls); },
-      editUseStamp ? {km: editMetaKm, author: author} : null);
+      editUseStamp ? {km: editMetaKm, author: author, soList: editMetaSoList} : null);
   }
 }
 
@@ -6237,7 +6245,7 @@ function takeStandalonePhoto() {
 }
 
 function _showStampPrompt() {
-  document.getElementById('pp-title').innerHTML = '🏷️ Razítkovat tuto fotku?<br><span style="font-size:11px;font-weight:400;color:var(--text2);">(km + datum + jméno)</span>';
+  document.getElementById('pp-title').innerHTML = '🏷️ Razítkovat tuto fotku?<br><span style="font-size:11px;font-weight:400;color:var(--text2);">(SO · km · datum · čas · jméno)</span>';
   document.getElementById('pp-yes').textContent = '✓ Ano, razítkovat';
   document.getElementById('pp-no').textContent  = '✗ Ne, bez razítka';
   document.getElementById('pp-counter').textContent = window.photoSession.count > 0
@@ -8169,6 +8177,7 @@ function openNewTaskModal(lat, lng, km) {
   document.getElementById('tnm-prof').value = '';
   document.getElementById('tnm-so').value = '';
   _fillTaskSoDatalist();
+  var _tst0 = document.getElementById('tnm-stamp-toggle'); if(_tst0) _tst0.checked = getStampPref();
   renderTnmPhotos();
   document.getElementById('tnm-lat').value = (lat !== null && lat !== undefined) ? lat : '';
   document.getElementById('tnm-lng').value = (lng !== null && lng !== undefined) ? lng : '';
@@ -8484,6 +8493,21 @@ function saveTaskFromForm() {
     return;
   }
 
+  // Razítko do fotky úkolu (SO, km, datum, čas, jméno) – jen pokud je přepínač zapnutý.
+  var _taskStampT = document.getElementById('tnm-stamp-toggle');
+  var _taskUseStamp = _taskStampT ? _taskStampT.checked : getStampPref();
+  setStampPref(_taskUseStamp);
+  var _taskMeta = null;
+  if(_taskUseStamp){
+    var _tSoList = taskSO ? [taskSO] : (!isNaN(km) ? soKandidati(km).slice(0,1).map(function(o){ return o.id; }) : []);
+    _taskMeta = {
+      km: (!isNaN(km) ? fmtKm(km) : null),
+      author: (window.currentUser ? window.currentUser.name : ''),
+      so: taskSO || '',
+      soList: _tSoList
+    };
+  }
+
   // Upload nových fotek na GitHub, pak teprve uložit úkol
   showSync('⏳ Nahrávám fotky 0/' + pendingItems.length + '…');
   uploadPhotosToGitHub(
@@ -8493,7 +8517,7 @@ function saveTaskFromForm() {
       hideSync();
       buildAndSaveTask(existingUrls.concat(uploadedUrls));
     },
-    null // bez razítka pro úkoly
+    _taskMeta
   );
 }
 
@@ -8618,6 +8642,7 @@ function editTask() {
   document.getElementById('tnm-prof').value = t.profese || '';
   document.getElementById('tnm-so').value = t.so || '';
   _fillTaskSoDatalist();
+  var _tstE = document.getElementById('tnm-stamp-toggle'); if(_tstE) _tstE.checked = getStampPref();
   document.getElementById('tnm-lat').value = (t.lat !== undefined && t.lat !== null) ? t.lat : '';
   document.getElementById('tnm-lng').value = (t.lng !== undefined && t.lng !== null) ? t.lng : '';
   document.getElementById('tnm-km').value  = (t.km  !== undefined && t.km  !== null) ? t.km  : '';
@@ -11444,7 +11469,7 @@ function copyDiaryExport(){
     <input type="file" id="note-gallery-input" accept="image/*" multiple style="display:none">
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:6px 0;cursor:pointer;">
       <input type="checkbox" id="note-stamp-toggle" checked style="width:18px;height:18px;cursor:pointer;">
-      <span>🏷️ Razítko do fotky (km, datum, jméno)</span>
+      <span>🏷️ Razítko do fotky (SO, km, datum, čas, jméno)</span>
     </label>
     <div class="note-btns">
       <button class="note-btn note-btn-cancel" onclick="closeNoteModal()">Zrušit</button>
@@ -11832,7 +11857,7 @@ function copyDiaryExport(){
     <input type="file" id="edit-gallery-input" accept="image/*" multiple style="display:none">
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:6px 0;cursor:pointer;">
       <input type="checkbox" id="edit-stamp-toggle" checked style="width:18px;height:18px;cursor:pointer;">
-      <span>🏷️ Razítko do nových fotek (km, datum, jméno)</span>
+      <span>🏷️ Razítko do nových fotek (SO, km, datum, čas, jméno)</span>
     </label>
     <div class="note-btns">
       <button class="note-btn note-btn-cancel" onclick="closeEditModal()">Zrušit</button>
@@ -12010,6 +12035,10 @@ function copyDiaryExport(){
     </div>
     <input type="file" id="tnm-photo-input" accept="image/*" capture="environment" multiple style="display:none" onchange="addTaskPhotos(this)">
     <input type="file" id="tnm-photo-gallery-input" accept="image/*" multiple style="display:none" onchange="addTaskPhotos(this)">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:4px 0 2px;cursor:pointer;">
+      <input type="checkbox" id="tnm-stamp-toggle" checked style="width:18px;height:18px;cursor:pointer;">
+      <span>🏷️ Razítko do fotky (SO, km, datum, čas, jméno)</span>
+    </label>
 
     <label>Přiřadit (1+ osob)</label>
     <div id="assignee-list"></div>
