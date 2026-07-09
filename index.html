@@ -2677,6 +2677,8 @@ var newNoteLat   = null;
 var newNoteLng   = null;
 var newNoteCat   = 0;
 var newNotePhotos= [];        // [{dataUrl, name}]
+var newNoteSoList= [];        // SO vybrané do razítka poznámky (id objektů)
+var newNoteSoTouched = false; // true = uživatel SO ručně vybral (jinak auto nejbližší)
 var currentNoteId= null;
 var longPressTimer = null;
 
@@ -2830,6 +2832,7 @@ function newNoteFromEvidence(){
 function openNoteModalManual(){
   newNoteLat = null; newNoteLng = null;   // pozici doplní staničení při uložení
   newNotePhotos = [];
+  newNoteSoList = []; newNoteSoTouched = false; renderNoteSoLabel();
   newNoteCat = 0;
   document.getElementById('note-nazev').value = '';
   var stEl = document.getElementById('note-stanic'); if(stEl) stEl.value = '';
@@ -3108,6 +3111,7 @@ function placeConfirm() {
     newNoteLat = lat;
     newNoteLng = lng;
     newNotePhotos = [];
+    newNoteSoList = []; newNoteSoTouched = false; renderNoteSoLabel();
     newNoteCat = 0;
     document.getElementById('note-author').value = localStorage.getItem('noteAuthor') || (window.currentUser ? window.currentUser.name : '');
     document.getElementById('note-text').value = '';
@@ -3369,6 +3373,35 @@ function removeNewPhoto(idx) {
   renderNewPhotoPreviews();
 }
 
+// ── SO do razítka poznámky: výběr jako u fotek (Blízké / Všechny / Ostatní) ──
+// Zjistí staničení poznámky (z pole nebo z pozice) a otevře stejný SO picker.
+function _noteKmStr(){
+  var stEl = document.getElementById('note-stanic');
+  var s = stEl ? (stEl.value || '').trim() : '';
+  if(s) return s;
+  if(newNoteLat != null && newNoteLng != null){
+    try { return fmtKm(gpxCumToRealKm(nearestOnRoute(newNoteLat, newNoteLng).cum)); } catch(e){}
+  }
+  return '';
+}
+function pickNoteSO(){
+  var kmStr = _noteKmStr();
+  chooseSOForPhoto(kmStr, function(ids){
+    newNoteSoList = (ids || []).slice();
+    newNoteSoTouched = true;
+    renderNoteSoLabel();
+  }, newNoteSoList, null, null);
+}
+function renderNoteSoLabel(){
+  var el = document.getElementById('note-so-label');
+  if(!el) return;
+  if(newNoteSoTouched){
+    el.textContent = newNoteSoList.length ? newNoteSoList.map(function(s){ return /^\d/.test(s)?('SO '+s):s; }).join(' · ') : 'bez SO';
+  } else {
+    el.textContent = 'automaticky (nejbližší)';
+  }
+}
+
 // Vložit fotku z galerie APPKY (už nahrané fotky) do nové poznámky.
 // Uloží se jako hotová URL → v saveNote() se nechá v keepUrls (znovu se nenahrává).
 function noteAddFromApp() {
@@ -3417,8 +3450,9 @@ function saveNote() {
     try {
       var _rk = gpxCumToRealKm(nearestOnRoute(newNoteLat, newNoteLng).cum);
       metaKm = fmtKm(_rk);
-      metaSoList = soKandidati(_rk).slice(0,1).map(function(o){ return o.id; });   // SO do razítka: nejbližší objekt (auto podle staničení)
+      if(!newNoteSoTouched) metaSoList = soKandidati(_rk).slice(0,1).map(function(o){ return o.id; });   // auto: nejbližší objekt
     } catch(e){}
+    if(newNoteSoTouched) metaSoList = newNoteSoList.slice();   // ručně vybrané SO (Blízké / Všechny / Ostatní)
   }
   closeNoteModal();
   if(toUpload.length === 0) { finish([]); }
@@ -11471,6 +11505,11 @@ function copyDiaryExport(){
       <input type="checkbox" id="note-stamp-toggle" checked style="width:18px;height:18px;cursor:pointer;">
       <span>🏷️ Razítko do fotky (SO, km, datum, čas, jméno)</span>
     </label>
+    <div onclick="pickNoteSO()" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:2px 0 6px;cursor:pointer;">
+      <span>🏗️ SO do razítka:</span>
+      <span id="note-so-label" style="color:var(--accent2);font-weight:600;">automaticky (nejbližší)</span>
+      <span style="margin-left:auto;">✏️</span>
+    </div>
     <div class="note-btns">
       <button class="note-btn note-btn-cancel" onclick="closeNoteModal()">Zrušit</button>
       <button class="note-btn note-btn-addphoto" onclick="document.getElementById('note-photo-input').click()" title="Vyfotit (po pořízení rovnou další - ukončit Zrušit v kameře)">📷</button>
