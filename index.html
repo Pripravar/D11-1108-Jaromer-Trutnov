@@ -3270,13 +3270,16 @@ function burnInMetadata(dataUrl, km, author, item, callback) {
   item = item || {};
   var img = new Image();
   img.onload = function() {
-    var canvas = document.createElement('canvas');
-    canvas.width = img.width; canvas.height = img.height;
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', new Date(), null));
-    callback(canvas.toDataURL('image/jpeg', 0.88));
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', new Date(), null));
+      callback(canvas.toDataURL('image/jpeg', 0.88));
+    } catch(e){ console.warn('Razítko selhalo, nahrávám originál:', e); callback(dataUrl); }
   };
+  img.onerror = function(){ console.warn('Foto se nenačetlo pro razítko, nahrávám originál'); callback(dataUrl); };
   img.src = dataUrl;
 }
 
@@ -3364,6 +3367,15 @@ function renderNewPhotoPreviews() {
 function removeNewPhoto(idx) {
   newNotePhotos.splice(idx, 1);
   renderNewPhotoPreviews();
+}
+
+// Vložit fotku z galerie APPKY (už nahrané fotky) do nové poznámky.
+// Uloží se jako hotová URL → v saveNote() se nechá v keepUrls (znovu se nenahrává).
+function noteAddFromApp() {
+  openAppGalleryPick(function(urls){
+    (urls || []).forEach(function(u){ if(u) newNotePhotos.push({ dataUrl: u, name: 'app' }); });
+    renderNewPhotoPreviews();
+  });
 }
 
 // ── Uložení poznámky ───────────────────────────────────
@@ -3826,12 +3838,14 @@ function burnInMetadataWithDate(dataUrl, km, author, dateObj, item, fields, call
   item = item || {};
   var img = new Image();
   img.onload = function() {
-    var canvas = document.createElement('canvas');
-    canvas.width = img.width; canvas.height = img.height;
-    var ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', dateObj, fields));
-    callback(canvas.toDataURL('image/jpeg', 0.9));
+    try {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.width; canvas.height = img.height;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', dateObj, fields));
+      callback(canvas.toDataURL('image/jpeg', 0.9));
+    } catch(e){ console.warn('Razítko selhalo, nahrávám originál:', e); callback(dataUrl); }
   };
   img.onerror = function(){ callback(dataUrl); }; // při selhání vrátí beze změny
   img.src = dataUrl;
@@ -8716,11 +8730,49 @@ function toggleTaskSubLayer(which, visible) {
 }
 
 // ── PWA: service worker registrace ──────────────────────────────────
+// Auto-update: když je nasazená nová verze, appka ji sama vezme a JEDNOU se obnoví.
+// Řeší „zaseklou" starou verzi na ploše telefonu (PWA běží starý kód, dokud se ručně
+// tvrdě neobnoví). Pojistka _swReloading brání reload smyčce.
+window._swReloading = false;
+function _swWireAutoUpdate(reg){
+  if(!reg) return;
+  // Nová verze SW se nainstalovala „na pozadí" → aktivuj ji hned (skipWaiting je v SW).
+  if(reg.waiting && navigator.serviceWorker.controller){ try{ reg.waiting.postMessage('skipWaiting'); }catch(e){} }
+  reg.addEventListener && reg.addEventListener('updatefound', function(){
+    var nw = reg.installing;
+    if(!nw) return;
+    nw.addEventListener('statechange', function(){
+      // Nový worker je připraven a stránku už řídí starý → převezme řízení sám (clients.claim).
+      if(nw.state === 'installed' && navigator.serviceWorker.controller){
+        console.log('Nová verze appky připravena – přebírá se.');
+      }
+    });
+  });
+}
 function registerServiceWorker() {
   if(!('serviceWorker' in navigator)) return Promise.reject('SW nepodporován');
+  // Když nový SW převezme řízení (po nasazení nové verze), obnov stránku – jen jednou.
+  if(!window._swControllerHooked){
+    window._swControllerHooked = true;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if(window._swReloading) return;
+      window._swReloading = true;
+      window.location.reload();
+    });
+  }
   return navigator.serviceWorker.register('service-worker.js')
     .then(function(reg){
       console.log('Service worker zaregistrován:', reg.scope);
+      _swWireAutoUpdate(reg);
+      // Zkontroluj novou verzi hned a pokaždé, když se appka vrátí do popředí
+      // (návrat na PWA z plochy telefonu) – tehdy se nová verze nasadí a stránka obnoví.
+      try { reg.update(); } catch(e){}
+      if(!window._swVisHooked){
+        window._swVisHooked = true;
+        document.addEventListener('visibilitychange', function(){
+          if(document.visibilityState === 'visible'){ try { reg.update(); } catch(e){} }
+        });
+      }
       return reg;
     })
     .catch(function(err){
@@ -11397,7 +11449,8 @@ function copyDiaryExport(){
     <div class="note-btns">
       <button class="note-btn note-btn-cancel" onclick="closeNoteModal()">Zrušit</button>
       <button class="note-btn note-btn-addphoto" onclick="document.getElementById('note-photo-input').click()" title="Vyfotit (po pořízení rovnou další - ukončit Zrušit v kameře)">📷</button>
-      <button class="note-btn note-btn-addphoto" onclick="document.getElementById('note-gallery-input').click()" title="Vybrat z galerie">🖼️</button>
+      <button class="note-btn note-btn-addphoto" onclick="document.getElementById('note-gallery-input').click()" title="Vybrat z galerie telefonu">🖼️</button>
+      <button class="note-btn note-btn-addphoto" onclick="noteAddFromApp()" title="Vybrat z galerie aplikace (už nahrané fotky)">🗂️</button>
       <button class="note-btn note-btn-save" onclick="saveNote()">Uložit</button>
     </div>
   </div>
