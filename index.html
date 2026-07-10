@@ -1170,10 +1170,10 @@ document.addEventListener('touchend', function(e){
     <label>🎨 Koord. situace – plochy</label>
     <label class="toggle"><input type="checkbox" id="lyr-koo-plochy" onchange="toggleKooPlochy(this.checked)"><span class="toggle-slider"></span></label>
   </div>
-  <div class="layer-sub" data-perm="koo" style="padding:2px 12px 8px;">
+  <div data-perm="koo" style="padding:2px 12px 8px;">
     <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);">
-      <span>Průhlednost ploch</span>
-      <input type="range" id="koo-op" min="0" max="100" step="5" value="40" oninput="setKooOpacity(this.value)" style="flex:1;">
+      <span style="white-space:nowrap;" title="Vlevo = průhlednější, vpravo = plnější barvy">Krytí ploch</span>
+      <input type="range" id="koo-op" min="0" max="100" step="5" value="40" oninput="setKooOpacity(this.value)" style="flex:1;min-width:60px;">
       <span id="koo-op-val" style="min-width:36px;text-align:right;">40%</span>
     </div>
     <div style="text-align:right;margin-top:5px;">
