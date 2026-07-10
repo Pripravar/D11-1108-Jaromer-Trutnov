@@ -1162,6 +1162,24 @@ document.addEventListener('touchend', function(e){
     <label>🗺️ Katastr (KN)</label>
     <label class="toggle"><input type="checkbox" id="lyr-katastr" onchange="toggleKatastr(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row" data-perm="koo">
+    <label>🧩 Koord. situace – kresba</label>
+    <label class="toggle"><input type="checkbox" id="lyr-koo-kresba" onchange="toggleKooKresba(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="layer-row" data-perm="koo">
+    <label>🎨 Koord. situace – plochy</label>
+    <label class="toggle"><input type="checkbox" id="lyr-koo-plochy" onchange="toggleKooPlochy(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
+  <div class="layer-sub" data-perm="koo" style="padding:2px 12px 8px;">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);">
+      <span>Průhlednost ploch</span>
+      <input type="range" id="koo-op" min="0" max="100" step="5" value="40" oninput="setKooOpacity(this.value)" style="flex:1;">
+      <span id="koo-op-val" style="min-width:36px;text-align:right;">40%</span>
+    </div>
+    <div style="text-align:right;margin-top:5px;">
+      <button onclick="zoomToKoo()" style="background:var(--panel2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;">🔎 Přiblížit na situaci</button>
+    </div>
+  </div>
   <h3>📍 Vrstvy</h3>
   <div id="layer-defaults-row" style="display:flex;gap:6px;margin-bottom:8px;">
     <button onclick="saveLayerDefaults()" style="flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px;font-size:12px;cursor:pointer;" title="Zapamatovat aktuální zapnuté vrstvy jako výchozí na tomto zařízení">💾 Uložit jako výchozí</button>
@@ -2585,6 +2603,81 @@ function toggleKatastr(en) {
     map.removeLayer(baseLayers.katastr);
   }
 }
+
+// ── Koordinační situace (DXF→GeoJSON, S-JTSK→WGS84) ─────────────────
+// Dvě samostatné vrstvy: 'kresba' (čáry) a 'plochy' (barevné, průhledné).
+// Data (dxf/koo_*.json) se stahují až při prvním zapnutí a pak se drží v paměti.
+window._kooLayers  = { plochy:null, kresba:null };
+window._kooLoading = { plochy:false, kresba:false };
+function _kooPane(name, z){
+  if(!map.getPane(name)){ map.createPane(name); map.getPane(name).style.zIndex = z; }
+  return name;
+}
+function getKooOpacity(){ var v = parseInt(localStorage.getItem('kooOpacity'),10); return isNaN(v) ? 40 : v; }
+function setKooOpacity(pct){
+  pct = Math.max(0, Math.min(100, parseInt(pct,10) || 0));
+  localStorage.setItem('kooOpacity', pct);
+  var lbl = document.getElementById('koo-op-val'); if(lbl) lbl.textContent = pct + '%';
+  if(window._kooLayers.plochy){
+    var o = pct/100;
+    window._kooLayers.plochy.setStyle(function(){ return { fillOpacity:o }; });
+  }
+}
+function _kooLoad(which, cb){
+  if(window._kooLayers[which]){ cb(window._kooLayers[which]); return; }
+  if(window._kooLoading[which]) return;
+  window._kooLoading[which] = true;
+  showSync('⏳ Načítám koordinační situaci…');
+  fetch('dxf/koo_' + which + '.json').then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(function(gj){
+    var layer;
+    if(which === 'plochy'){
+      var o = getKooOpacity()/100;
+      layer = L.geoJSON(gj, {
+        renderer: L.canvas({ pane:_kooPane('kooPlochy',350), padding:0.5 }),
+        style: function(f){ return { stroke:false, fill:true, fillColor:(f.properties&&f.properties.c)||'#888', fillOpacity:o }; }
+      });
+    } else {
+      layer = L.geoJSON(gj, {
+        renderer: L.canvas({ pane:_kooPane('kooKresba',355), padding:0.5 }),
+        style: function(f){ return { color:(f.properties&&f.properties.c)||'#888', weight:1, opacity:0.9, fill:false }; }
+      });
+    }
+    window._kooLayers[which] = layer;
+    window._kooLoading[which] = false;
+    hideSync();
+    cb(layer);
+  }).catch(function(e){
+    window._kooLoading[which] = false; hideSync();
+    console.error('KOO load ' + which + ':', e);
+    showToast('❌ Nepodařilo se načíst koordinační situaci', 3000);
+    var cbx = document.getElementById(which === 'plochy' ? 'lyr-koo-plochy' : 'lyr-koo-kresba');
+    if(cbx) cbx.checked = false;
+  });
+}
+function toggleKooPlochy(en){
+  if(en && !_layerGuard('koo','lyr-koo-plochy','Koordinační situace')) return;
+  if(en){ _kooLoad('plochy', function(l){ var cb=document.getElementById('lyr-koo-plochy'); if(cb&&cb.checked) l.addTo(map); }); }
+  else if(window._kooLayers.plochy){ map.removeLayer(window._kooLayers.plochy); }
+}
+function toggleKooKresba(en){
+  if(en && !_layerGuard('koo','lyr-koo-kresba','Koordinační situace')) return;
+  if(en){ _kooLoad('kresba', function(l){ var cb=document.getElementById('lyr-koo-kresba'); if(cb&&cb.checked) l.addTo(map); }); }
+  else if(window._kooLayers.kresba){ map.removeLayer(window._kooLayers.kresba); }
+}
+function zoomToKoo(){
+  var l = window._kooLayers.plochy || window._kooLayers.kresba;
+  if(!l){ showToast('Nejdřív zapni vrstvu koordinační situace', 2200); return; }
+  try { map.fitBounds(l.getBounds(), { padding:[20,20] }); } catch(e){}
+}
+// Sync posuvníku průhlednosti ploch s uloženou hodnotou
+window.addEventListener('load', function(){
+  var v = getKooOpacity();
+  var s = document.getElementById('koo-op'); if(s) s.value = v;
+  var l = document.getElementById('koo-op-val'); if(l) l.textContent = v + '%';
+});
 
 
 // ── INIT ──────────────────────────────
@@ -7327,6 +7420,7 @@ var FEATURES = [
   {key:'katastr',    label:'🗺️ Vrstva: Katastr (KN)',  btns:[]},
   {key:'trasa',      label:'🗺️ Vrstva: Trasa a staničení', btns:[]},
   {key:'objekty',    label:'🗺️ Vrstva: SO objekty (propustky, doplňky, osy)', btns:[]},
+  {key:'koo',        label:'🗺️ Vrstva: Koordinační situace (DXF)', btns:[]},
   {key:'gps',        label:'🗺️ Vrstva: GPS poloha',    btns:['btn-gps']}
 ];
 // Mapa: název vrstvy v toggleLayer() → potřebné právo (obrana do hloubky)
