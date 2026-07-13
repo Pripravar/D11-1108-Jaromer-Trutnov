@@ -1112,10 +1112,11 @@ document.addEventListener('touchend', function(e){
       <button class="auth-back" onclick="showMainView()">↩ Zpět</button>
     </div>
 
-    <!-- Pohled 4: první přihlášení – doplnění jména -->
+    <!-- Pohled 4: první přihlášení – doplnění jména + firmy -->
     <div id="auth-view-name" style="display:none;">
       <p style="text-align:left;">Vítej! Pro ostatní v týmu, jak se jmenuješ?</p>
       <input type="text" id="name-input" class="auth-input" placeholder="Jméno a příjmení" autocapitalize="words">
+      <input type="text" id="firma-input" class="auth-input" placeholder="🏢 Firma (za koho jsi)" autocapitalize="words" style="margin-top:8px;">
       <button class="auth-google" onclick="savePhoneUserName()">Pokračovat →</button>
     </div>
 
@@ -7084,6 +7085,8 @@ function completeLogin(user, nameOverride, phoneOverride) {
       _showPendingApproval(user.uid, displayName);
       return;
     }
+    // Chybí firma? (typicky Google login – telefon ji zadává u jména) → po vstupu vyskočí dotaz.
+    window._firmaMissing = !((u.firma || '').trim());
     _enterApp(displayName);
   }).catch(function(){ _enterApp(displayName); });  // fail-open, blokaci/schválení živě dořeší loadAllUsers
 }
@@ -7133,6 +7136,44 @@ function _enterApp(displayName){
   setTimeout(applyLayerDefaults, 3000);
   // Deep-link ?foto / #foto → velké tlačítko „Fotit" (iOS nemůže spustit foťák bez gesta)
   if(/foto/i.test((location.hash||'') + (location.search||''))) setTimeout(_showFotoDeepLink, 700);
+  // Chybí firma (typicky Google login) → vyskakovací dotaz na doplnění
+  if(window._firmaMissing) setTimeout(_promptFirma, 900);
+}
+
+// ── Doplnění firmy (popup po Gmail loginu, když firma chybí) ─────────
+function _promptFirma(){
+  if(!window.currentUser) return;
+  window._firmaMissing = false;
+  var m = document.getElementById('firma-modal');
+  if(!m){
+    m = document.createElement('div'); m.id = 'firma-modal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;';
+    m.innerHTML =
+      '<div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;max-width:420px;width:100%;padding:20px;">'+
+        '<div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;">🏢 Za jakou firmu jsi?</div>'+
+        '<div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.5;">Doplň prosím firmu – uvidí ji tým u tebe (šichtovka, práva, podpisy).</div>'+
+        '<input type="text" id="firma-modal-input" placeholder="Název firmy" autocapitalize="words" style="width:100%;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;box-sizing:border-box;">'+
+        '<div style="display:flex;gap:8px;margin-top:14px;">'+
+          '<button onclick="_saveFirmaFromModal()" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:700;cursor:pointer;">Uložit</button>'+
+          '<button onclick="_dismissFirmaModal()" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:14px;cursor:pointer;">Teď ne</button>'+
+        '</div>'+
+      '</div>';
+    document.body.appendChild(m);
+  } else {
+    m.style.display = 'flex';
+    var inp = document.getElementById('firma-modal-input'); if(inp) inp.value = '';
+  }
+  setTimeout(function(){ var i=document.getElementById('firma-modal-input'); if(i) i.focus(); }, 150);
+}
+function _dismissFirmaModal(){ var m=document.getElementById('firma-modal'); if(m) m.style.display='none'; }
+function _saveFirmaFromModal(){
+  var inp = document.getElementById('firma-modal-input');
+  var firma = inp ? (inp.value || '').trim() : '';
+  if(!firma){ _dismissFirmaModal(); return; }
+  if(!window.currentUser){ _dismissFirmaModal(); return; }
+  db.ref('uzivatele/' + window.currentUser.uid + '/firma').set(firma)
+    .then(function(){ _dismissFirmaModal(); showToast('🏢 Firma uložena: ' + firma, 2000); })
+    .catch(function(e){ console.error('save firma:', e); showToast('❌ Nepodařilo se uložit firmu', 2800); });
 }
 function _showFotoDeepLink(){
   if(typeof hasPerm==='function' && !hasPerm('foto')) return;
@@ -7318,11 +7359,14 @@ function savePhoneUserName() {
   var u = fbAuth.currentUser;
   if(!u) { showAuthError('Chyba: nejsi přihlášen.'); return; }
   var phone = window._pendingPhone || u.phoneNumber || '';
+  var firmaEl = document.getElementById('firma-input');
+  var firma = firmaEl ? (firmaEl.value || '').trim() : '';
   showAuthError('⏳ Ukládám…');
   u.updateProfile({displayName: name})
     .then(function(){
       var prof = { uid: u.uid, name: name, email: u.email || '', photo: u.photoURL || '', lastSeen: Date.now() };
       if(phone) prof.phone = phone;
+      if(firma) prof.firma = firma;
       return db.ref('uzivatele/' + u.uid).update(prof);
     })
     .then(function(){
@@ -7928,6 +7972,11 @@ function renderUserAdmin(){
     // Typ kontaktu – pomáhá poznat, který duplicitní záznam je který
     if(u.email)      html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">📧 Google · ' + escapeHtml(u.email) + '</div>';
     else if(u.phone) html += '<div style="font-size:11px;color:var(--text2);margin-top:2px;">📱 telefon · ' + escapeHtml(u.phone) + '</div>';
+    // Firma (editovatelná adminem) – uvidí ji tým u této osoby
+    html += '<div style="margin-top:6px;display:flex;align-items:center;gap:6px;">'+
+      '<span style="font-size:12px;color:var(--text2);white-space:nowrap;">🏢 Firma:</span>'+
+      '<input type="text" value="' + escapeHtml(u.firma || '') + '" onchange="setUserFirma(\'' + uid + '\',this.value)" placeholder="název firmy" style="flex:1;min-width:120px;background:var(--panel);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 8px;font-size:12px;">'+
+      '</div>';
     if(!self){
       html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">';
       if(!adm){
@@ -7984,6 +8033,13 @@ function uaAdmin(uid, mk){
   if(uid === (window.currentUser && window.currentUser.uid)){ showToast('Sebe nelze odadminovat', 2500); return; }
   db.ref('uzivatele/' + uid + '/role').set(mk ? 'admin' : null)
     .then(function(){ showToast(mk ? '⭐ Admin přidán' : 'Admin odebrán', 1800); })
+    .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
+}
+// Admin nastaví/upraví firmu u osoby (uvidí ji tým – šichtovka, práva, podpisy)
+function setUserFirma(uid, val){
+  var f = (val || '').trim();
+  db.ref('uzivatele/' + uid + '/firma').set(f || null)
+    .then(function(){ showToast(f ? '🏢 Firma: ' + f : '🏢 Firma smazána', 1600); })
     .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 3000); });
 }
 // Efektivní právo uživatele pro admin UI (override > kategorie)
