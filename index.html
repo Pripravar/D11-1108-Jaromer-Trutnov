@@ -3725,6 +3725,7 @@ function openPhotoFs(src, firebaseKey, item) {
     _photoFsCommentsRef.on('value', function(snap){
       var arr = []; snap.forEach(function(ch){ var v=ch.val()||{}; v.cid=ch.key; arr.push(v); });
       arr.sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+      window._photoFsComments = arr;   // pro výpočet příjemců push u @zmínek
       var cnt = document.getElementById('photo-fs-comments-count'); if(cnt) cnt.textContent = arr.length;
       renderPhotoComments(arr);
     });
@@ -3777,7 +3778,7 @@ function renderPhotoComments(arr){
     var del = mine ? '<button onclick="deletePhotoComment(\''+c.cid+'\')" style="background:none;border:none;color:#e94560;font-size:12px;cursor:pointer;padding:0 0 0 6px;">smazat</button>' : '';
     return '<div style="margin-bottom:12px;">'
       +'<div style="font-size:12px;color:var(--accent2);font-weight:700;">'+escapeHtml(c.author||'Anonym')+' <span style="color:var(--text2);font-weight:400;">· '+escapeHtml(when)+'</span>'+del+'</div>'
-      +'<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word;">'+escapeHtml(c.text||'')+'</div></div>';
+      +'<div style="font-size:14px;color:var(--text);white-space:pre-wrap;word-break:break-word;">'+_renderTextWithMentions(c.text||'')+'</div></div>';
   }).join('');
   box.scrollTop = box.scrollHeight;
 }
@@ -3788,11 +3789,44 @@ function addPhotoComment(){
   var inp = document.getElementById('photo-fs-comment-input');
   var text = (inp && inp.value || '').trim();
   if(!text) return;
+  var mentions = _extractMentions(text);
   var c = { text:text, author:(window.currentUser.name||''), uid:window.currentUser.uid, ts:Date.now() };
+  if(mentions.length) c.mentions = mentions;
   trackEvent('foto_komentar');
-  db.ref('standalone_photos/' + _photoFsKey + '/komentare').push(c)
-    .then(function(){ if(inp) inp.value=''; })
+  var fsKey = _photoFsKey, item = _photoFsItem;
+  db.ref('standalone_photos/' + fsKey + '/komentare').push(c)
+    .then(function(){
+      if(inp) inp.value='';
+      _hideMentionPop();
+      window._mentionPicks = {};
+      _notifyPhotoComment(fsKey, item, text, mentions.map(function(m){ return m.uid; }));
+    })
     .catch(function(){ showToast('❌ Komentář se neuložil', 2500); });
+}
+// Push u komentáře fotky: autor fotky + dřívější komentující + @zmínění (kromě sebe).
+function _notifyPhotoComment(fsKey, item, text, mentionUids){
+  try {
+    var me = window.currentUser && window.currentUser.uid;
+    var set = {};
+    if(item && item.uid) set[item.uid] = 1;                 // autor fotky
+    (window._photoFsComments || []).forEach(function(c){ if(c.uid) set[c.uid] = 1; });   // dřívější komentující
+    (mentionUids || []).forEach(function(uid){ if(uid) set[uid] = 1; });                 // @zmínění
+    if(me) delete set[me];
+    var recipients = Object.keys(set);
+    if(!recipients.length) return;
+    var rec = {
+      id: 'n_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
+      typ: 'foto_komentar',
+      fotoKey: fsKey || '',
+      recipientUids: recipients,
+      mentions: (mentionUids || []),
+      cmtText: text || '',
+      byName: (window.currentUser && window.currentUser.name) || '',
+      priorita: 'normalni',
+      time: Date.now()
+    };
+    db.ref('notifikace_fronta/' + rec.id).set(rec).catch(function(){});
+  } catch(e){ console.warn('notifyPhotoComment', e); }
 }
 function deletePhotoComment(cid){
   if(!_photoFsKey || !cid) return;
@@ -4327,12 +4361,46 @@ function editPhotoSO(){
     sel = sel || [];
     db.ref('standalone_photos/' + key).update({ so: (sel[0] || ''), soList: sel, restampOnDownload: true })
       .then(function(){
-        if(item){ item.so = sel[0] || ''; item.soList = sel; }
+        if(item){ item.so = sel[0] || ''; item.soList = sel; item.restampOnDownload = true; }
         showToast('🏗️ Přeřazeno (' + sel.length + ' SO)', 1800);
         if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+        _restampPhotoNow(item, key);   // #59: hned přerazítkovat (jen když je originál)
       })
       .catch(function(){ showToast('❌ Přeřazení selhalo (pravidla?)', 3000); });
   }, preset);
+}
+// #59: přerazítkovat JEDNU fotku hned po přeřazení SO (z čistého originálu s novým SO).
+// POJISTKA: bez item.urlOriginal se nedělá (staré fotky bez originálu → jinak dvojité razítko;
+// zůstane restampOnDownload=true a razítko se dopočítá až při stažení).
+function _restampPhotoNow(item, key){
+  if(!item || !item.urlOriginal || !key) return;
+  var allFields = { so:true, km:true, datum:true, cas:true, jmeno:true };
+  showSync('⏳ Přerazítkovávám fotku…');
+  preparePhotoBlobForDownload(item, { stamp:true, fields:allFields })
+    .then(function(blob){ return blobToDataUrl(blob); })
+    .then(function(dataUrl){
+      return new Promise(function(resolve, reject){
+        var fname = 'restamp_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.jpg';
+        uploadPhotoToGitHub(dataUrl, fname, function(url){ url ? resolve(url) : reject('upload'); });
+      });
+    })
+    .then(function(newUrl){
+      var showStamped = (item.url === item.urlStamped);   // v galerii se ukazovala orazítkovaná verze
+      var upd = { urlStamped: newUrl, stamped: true, restampOnDownload: null };
+      if(showStamped) upd.url = newUrl;
+      return db.ref('standalone_photos/' + key).update(upd).then(function(){
+        item.urlStamped = newUrl; item.stamped = true; item.restampOnDownload = null;
+        if(showStamped){ item.url = newUrl; }
+        hideSync();
+        // aktualizuj fullscreen, pokud je otevřená právě tahle fotka
+        if(_photoFsKey === key){
+          var im = document.getElementById('photo-fs-img'); if(im && showStamped) im.src = newUrl;
+        }
+        if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+        showToast('🏷️ Razítko aktualizováno', 1600);
+      });
+    })
+    .catch(function(e){ hideSync(); console.warn('restamp:', e); /* ticho – razítko se dopočte při stažení */ });
 }
 function lockViewport()  { document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0'); }
 function unlockViewport(){ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=5.0'); }
@@ -6205,7 +6273,21 @@ function _renderSOPicker(){
   if(sub) sub.textContent='Vyber jeden i víc objektů – fotka se zařadí do každého';
   function tab(v,l){ return '<button onclick="_soPickView(\''+v+'\')" class="so-pick-tab'+(_soPick.view===v?' on':'')+'">'+l+'</button>'; }
   var html='<div class="so-pick-tabs">'+tab('blizke','📍 Blízké')+tab('vsechny','📋 Všechny SO')+tab('ostatni','📦 Ostatní')+'</div>';
-  var pool = (_soPick.view==='blizke') ? _soPick.kand : (_soPick.view==='ostatni' ? customSO : SO_CATALOG);
+  var pool;
+  if(_soPick.view==='blizke'){
+    // #49: union(GPS-kandidáti, předvybrané) – předvybrané SO mimo okolí musí být vidět a jít odškrtnout
+    pool = _soPick.kand.slice();
+    var have = {}; pool.forEach(function(o){ have[o.id]=1; });
+    _soPick.sel.forEach(function(id){
+      if(have[id]) return;
+      var found = null;
+      SO_CATALOG.forEach(function(o){ if(o.id===id) found=o; });
+      if(!found) customSO.forEach(function(o){ if(o.id===id) found=o; });
+      pool.push(found || { id:id, short:'' });
+    });
+  } else {
+    pool = (_soPick.view==='ostatni' ? customSO : SO_CATALOG);
+  }
   if(!pool.length) html+='<div style="color:var(--text2);font-size:12px;padding:6px;">'+(_soPick.view==='blizke'?'Žádné blízké objekty – zkus „Všechny SO".':(_soPick.view==='ostatni'?'Zatím žádné vlastní objekty.':'—'))+'</div>';
   var canEditCustom = (_soPick.view==='ostatni') && (typeof isAdmin==='function' && isAdmin());
   pool.forEach(function(o){
@@ -6381,6 +6463,7 @@ function takeStandalonePhoto() {
   }
   // Reset série a otevři foťák
   window.photoSession.count = 0;
+  window._lastSeriesSO = [];   // #49: nová série → zapomeň SO z minulé série
   document.getElementById('standalone-photo-input').click();
 }
 
@@ -6470,12 +6553,13 @@ window.addEventListener('load', function() {
         // Výběr stavebního objektu (složky) podle staničení, pak teprve razítko + upload.
         chooseSOForPhoto(km, function(soArr, share){
           soArr = soArr || [];
+          window._lastSeriesSO = soArr.slice();   // #49: zapamatuj pro další fotku v sérii
           window.photoSession.pendingMeta.soList = soArr;
           window.photoSession.pendingMeta.so = soArr[0] || '';   // primární (zpětná kompatibilita)
           window.photoSession.pendingMeta.sdilenoSub = !!(share && share.sub);
           window.photoSession.pendingMeta.sdilenoInvestor = !!(share && share.investor);
           ppAnswer(true);  // true = v galerii bude razítkovaná verze
-        }, null, function(){
+        }, (window._lastSeriesSO || []), function(){
           // Zahodit fotku – neukládá se nic
           window.photoSession.pendingPhoto = null;
           window.photoSession.pendingMeta = null;
@@ -8213,7 +8297,7 @@ function _updatePrioHint(){
   };
   hint.textContent = m[sel.value] || '';
 }
-function sendTaskNotificationRequest(task, typ) {
+function sendTaskNotificationRequest(task, typ, extra) {
   // Cloud Function (viz cloud-function/) sleduje uzel /notifikace_fronta
   // a pošle FCM zprávu příslušným uživatelům. Pokud Cloud Function neexistuje,
   // notifikace prostě nepřijdou - úkolníček ale funguje normálně.
@@ -8229,6 +8313,11 @@ function sendTaskNotificationRequest(task, typ) {
     prirazeno:  task.prirazeno || [],
     time:       Date.now()
   };
+  if(extra){
+    if(extra.mentions && extra.mentions.length) rec.mentions = extra.mentions;   // uids zmíněných @lidí
+    if(extra.text)   rec.cmtText = extra.text;
+    if(extra.byName) rec.byName  = extra.byName;
+  }
   db.ref('notifikace_fronta/' + rec.id).set(rec).catch(function(e){
     console.warn('Notifikace nemohly být zařazeny:', e);
   });
@@ -8891,6 +8980,72 @@ function deleteTaskConfirm() {
   deleteTaskFromFirebase(t.id, function(){ closeTaskDetail(); });
 }
 
+// ── @ZMÍNKY lidí v komentářích (sdílené pro úkoly i fotky) ──────────
+window._mentionPicks = {};   // {'@Celé Jméno': uid} – co uživatel vybral z našeptávače
+var _mentionInputEl = null;
+function _mentionPop(){
+  var p = document.getElementById('mention-pop');
+  if(!p){
+    p = document.createElement('div'); p.id = 'mention-pop';
+    p.style.cssText = 'position:fixed;z-index:9500;background:var(--panel);border:1px solid var(--border);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.5);max-height:220px;overflow-y:auto;min-width:200px;display:none;';
+    document.body.appendChild(p);
+  }
+  return p;
+}
+function _onCommentInput(inputEl){
+  _mentionInputEl = inputEl;
+  var pop = _mentionPop();
+  var val = inputEl.value || '';
+  var pos = inputEl.selectionStart || val.length;
+  var m = val.slice(0, pos).match(/@([\p{L}\w]*)$/u);
+  if(!m){ pop.style.display = 'none'; return; }
+  var q = (m[1] || '').toLowerCase();
+  var me = window.currentUser && window.currentUser.uid;
+  var seen = {}, list = [];
+  Object.keys(window.allUsers || {}).forEach(function(uid){
+    var u = window.allUsers[uid] || {};
+    if(!u.name || u.blocked === true || uid === me) return;
+    if(q && u.name.toLowerCase().indexOf(q) < 0 && (u.firma||'').toLowerCase().indexOf(q) < 0) return;
+    var k = u.name.trim().toLowerCase(); if(seen[k]) return; seen[k] = 1;   // telefon = víc účtů stejného jména
+    list.push({ uid: uid, name: u.name, firma: u.firma || '' });
+  });
+  if(!list.length){ pop.style.display = 'none'; return; }
+  pop.innerHTML = list.slice(0, 8).map(function(p){
+    return '<div onclick="_insertMention(\'' + p.uid + '\',\'' + encodeURIComponent(p.name) + '\')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:14px;white-space:nowrap;">👤 ' + escapeHtml(p.name) + (p.firma ? ' <span style="color:var(--text2);font-size:11px;">· ' + escapeHtml(p.firma) + '</span>' : '') + '</div>';
+  }).join('');
+  var r = inputEl.getBoundingClientRect();
+  pop.style.left = Math.round(r.left) + 'px';
+  pop.style.width = Math.round(r.width) + 'px';
+  pop.style.bottom = Math.round(window.innerHeight - r.top + 4) + 'px';
+  pop.style.top = 'auto';
+  pop.style.display = 'block';
+}
+function _insertMention(uid, nameEnc){
+  var name = decodeURIComponent(nameEnc);
+  var el = _mentionInputEl; if(!el) return;
+  var val = el.value || '';
+  var pos = el.selectionStart || val.length;
+  var upto = val.slice(0, pos).replace(/@([\p{L}\w]*)$/u, '@' + name + ' ');
+  el.value = upto + val.slice(pos);
+  window._mentionPicks['@' + name] = uid;
+  var pop = document.getElementById('mention-pop'); if(pop) pop.style.display = 'none';
+  el.focus();
+  try { el.setSelectionRange(upto.length, upto.length); } catch(e){}
+}
+// Jen ti, které uživatel vybral z našeptávače A jejichž @tag v textu zůstal
+function _extractMentions(text){
+  var out = [], seen = {};
+  Object.keys(window._mentionPicks || {}).forEach(function(tag){
+    if(text.indexOf(tag) >= 0){ var uid = window._mentionPicks[tag]; if(uid && !seen[uid]){ seen[uid] = 1; out.push({ uid: uid, name: tag.slice(1) }); } }
+  });
+  return out;
+}
+function _hideMentionPop(){ var p = document.getElementById('mention-pop'); if(p) p.style.display = 'none'; }
+// Zvýraznění @Jméno v uloženém textu (escapuje HTML, pak obarví @Jméno Příjmení)
+function _renderTextWithMentions(text){
+  return escapeHtml(text || '').replace(/@([\p{L}][\p{L}\w]*(?:\s[\p{L}][\p{L}\w]*)?)/gu, '<span style="color:var(--accent2);font-weight:700;">@$1</span>');
+}
+
 // ── KOMENTÁŘE ───────────────────────────────────────────────────────
 function renderComments(t) {
   var box = document.getElementById('td-comments');
@@ -8904,7 +9059,7 @@ function renderComments(t) {
   }
   box.innerHTML = arr.map(function(c){
     var dt = c.time ? new Date(c.time).toLocaleString('cs-CZ') : '';
-    return '<div class="td-comment"><div class="cmt-head"><b>' + escapeHtml(c.name) + '</b> · ' + dt + '</div><div>' + escapeHtml(c.text) + '</div></div>';
+    return '<div class="td-comment"><div class="cmt-head"><b>' + escapeHtml(c.name) + '</b> · ' + dt + '</div><div>' + _renderTextWithMentions(c.text) + '</div></div>';
   }).join('');
   // Scroll dolů
   box.scrollTop = box.scrollHeight;
@@ -8917,6 +9072,7 @@ function addComment() {
   var t = window.allTasks.filter(function(x){ return x.id === window.openTaskId; })[0];
   if(!t || !window.currentUser) return;
   var cid = 'c_' + Date.now() + '_' + Math.random().toString(36).substr(2,4);
+  var mentions = _extractMentions(txt);
   var cmt = {
     id:   cid,
     uid:  window.currentUser.uid,
@@ -8924,9 +9080,16 @@ function addComment() {
     text: txt,
     time: Date.now()
   };
+  if(mentions.length) cmt.mentions = mentions;
   db.ref('ukoly/' + t.id + '/komentare/' + cid).set(cmt).then(function(){
     input.value = '';
-    sendTaskNotificationRequest(t, 'komentar');
+    _hideMentionPop();
+    window._mentionPicks = {};
+    sendTaskNotificationRequest(t, 'komentar', {
+      text: txt,
+      mentions: mentions.map(function(m){ return m.uid; }),
+      byName: window.currentUser.name
+    });
   });
 }
 
@@ -9210,8 +9373,8 @@ function getAllProjectSOs(){
   // Z denní historie
   Object.keys(window.diaryAllDays || {}).forEach(function(dt){
     var d = window.diaryAllDays[dt];
-    if(d && d.so_osoby)  Object.keys(d.so_osoby) .forEach(function(k){ var v = d.so_osoby[k];  if(v) set.add(v); });
-    if(d && d.so_stroje) Object.keys(d.so_stroje).forEach(function(k){ var v = d.so_stroje[k]; if(v) set.add(v); });
+    if(d && d.so_osoby)  Object.keys(d.so_osoby) .forEach(function(k){ String(d.so_osoby[k]||'') .split(',').forEach(function(x){ x=x.trim(); if(x) set.add(x); }); });
+    if(d && d.so_stroje) Object.keys(d.so_stroje).forEach(function(k){ String(d.so_stroje[k]||'').split(',').forEach(function(x){ x=x.trim(); if(x) set.add(x); }); });
   });
   return Array.from(set).sort();
 }
@@ -9223,20 +9386,50 @@ function changeSOForDay(id, kind, val){
   else renderSichtovka();
 }
 
+// #58: SO je teď TLAČÍTKO → multi-výběr popup (může být víc SO na osobu/stroj).
+// Hodnota se ukládá jako čárkou oddělený seznam („SO 101, SO 103"); jedno SO = string dál funguje.
 function _soSelectHtml(id, kind, currentValue){
-  var sos = getAllProjectSOs();
-  if(currentValue && sos.indexOf(currentValue) === -1) sos.unshift(currentValue);
-  // První volba: explicitní "Bez SO" (value = "" → uloží prázdný string jako override)
-  // Pokud currentValue je '', tato volba bude vybraná.
-  var isNone = (currentValue === '' || currentValue == null);
-  var opts = '<option value=""' + (isNone ? ' selected' : '') + '>⊘ Bez SO</option>';
-  sos.forEach(function(so){
-    opts += '<option value="' + escapeHtml(so) + '"' + (so === currentValue ? ' selected' : '') + '>' + escapeHtml(so) + '</option>';
-  });
-  opts += '<option value="__custom__">+ jiné…</option>';
-  opts += '<option value="__reset__">↺ Vymazat denní volbu</option>';
-  return '<select class="sht-so-sel" data-id="' + id + '" data-kind="' + kind + '" onchange="handleSOSelectChange(this)" onclick="event.stopPropagation()" title="SO platí od tohohle dne dál">' + opts + '</select>';
+  var has = currentValue && String(currentValue).trim();
+  var label = has ? escapeHtml(currentValue) : '⊘ SO';
+  return '<button class="sht-so-sel" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="event.stopPropagation();openSichtSoPicker(\'' + id + '\',\'' + kind + '\')" title="Přiřadit SO (může být víc) – platí od tohohle dne dál">' + label + '</button>';
 }
+// ── #58: multi-výběr SO pro osobu/stroj v šichtovce ────────────────
+var _sichtSoState = null;
+function openSichtSoPicker(id, kind){
+  var cur = effectiveSOForId(id, window.diaryCurrentDate, kind) || '';
+  var sel = {};
+  String(cur).split(',').forEach(function(s){ s = s.trim(); if(s) sel[s] = 1; });
+  _sichtSoState = { id: id, kind: kind, sel: sel };
+  _renderSichtSoList();
+  var m = document.getElementById('sicht-so-modal'); if(m) m.classList.add('open');
+}
+function _renderSichtSoList(){
+  var st = _sichtSoState; if(!st) return;
+  var sos = []; try { sos = Array.from(getAllProjectSOs()); } catch(e){}
+  Object.keys(st.sel).forEach(function(s){ if(sos.indexOf(s) < 0) sos.unshift(s); });   // aktuální mimo katalog nahoru
+  var box = document.getElementById('sicht-so-list'); if(!box) return;
+  box.innerHTML = sos.length ? sos.map(function(s){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px;">'+
+      '<input type="checkbox" ' + (st.sel[s] ? 'checked' : '') + ' onchange="_sichtSoToggle(\'' + encodeURIComponent(s) + '\',this.checked)" style="width:18px;height:18px;flex:0 0 auto;"> ' + escapeHtml(s) + '</label>';
+  }).join('') : '<div style="color:var(--text2);font-size:13px;padding:10px;">Zatím žádné SO – přidej vlastní níže.</div>';
+}
+function _sichtSoToggle(sEnc, on){
+  var s = decodeURIComponent(sEnc); if(!_sichtSoState) return;
+  if(on) _sichtSoState.sel[s] = 1; else delete _sichtSoState.sel[s];
+}
+function _sichtSoAddCustom(){
+  var inp = document.getElementById('sicht-so-custom'); if(!inp || !_sichtSoState) return;
+  var v = (inp.value || '').trim(); if(!v) return;
+  _sichtSoState.sel[v] = 1; inp.value = '';
+  _renderSichtSoList();
+}
+function _sichtSoNone(){ if(_sichtSoState){ _sichtSoState.sel = {}; _renderSichtSoList(); } }
+function saveSichtSo(){
+  var st = _sichtSoState; closeSichtSo();
+  if(!st) return;
+  changeSOForDay(st.id, st.kind, Object.keys(st.sel).join(', '));   // '' = explicitní Bez SO
+}
+function closeSichtSo(){ var m = document.getElementById('sicht-so-modal'); if(m) m.classList.remove('open'); }
 
 function handleSOSelectChange(sel){
   var id   = sel.getAttribute('data-id');
@@ -9599,23 +9792,37 @@ function renderMaterialy(){
       +'<div style="font-size:11px;color:var(--text2);">'+escapeHtml(x.name||'')+(x.photos&&x.photos.length?(' · 📷 '+x.photos.length):'')+'</div></div>'
       +'<button onclick="materialAddPhoto(\''+x._id+'\')" title="Přidat další dodák" style="background:none;border:none;color:var(--text2);font-size:15px;cursor:pointer;padding:4px;">📷</button>'
       +(canDel?'<button onclick="materialDelete(\''+x._id+'\')" style="background:none;border:none;color:#e94560;font-size:14px;cursor:pointer;padding:4px;">🗑</button>':'')
-      +'</div>' + fotky + '</div>';
+      +'</div>'
+      + (canDel
+          ? '<textarea onchange="materialSetNote(\''+x._id+'\',this.value)" placeholder="📝 Poznámka k materiálu…" style="width:100%;box-sizing:border-box;margin-top:5px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px;resize:vertical;min-height:30px;">'+escapeHtml(x.poznamka||'')+'</textarea>'
+          : (x.poznamka ? '<div style="margin-top:5px;font-size:12px;color:var(--text2);white-space:pre-wrap;">📝 '+escapeHtml(x.poznamka)+'</div>' : ''))
+      + fotky + '</div>';
   }).join('');
+}
+// #60: poznámka ke konkrétnímu materiálu (autor/admin). NErenderuje znovu → nechá kurzor v poli.
+function materialSetNote(id, val){
+  var m = _matList()[id]; if(!m) return;
+  if(!((typeof isOwner==='function' ? isOwner(m,'uid') : true) || (typeof isAdmin==='function' && isAdmin()))) return;
+  m.poznamka = (val || '').trim() || null;
+  diarySaveDay();
 }
 function materialAdd(){
   if(!window.currentUser || !window.diaryCurrentData) return;
   var nazev = (document.getElementById('mat-nazev').value || '').trim();
   var so    = (document.getElementById('mat-so').value || '').trim();
+  var pozn  = (document.getElementById('mat-poznamka') ? document.getElementById('mat-poznamka').value : '').trim();
   var hasPhotos = photoBuf('material').length > 0;
   if(!nazev && !hasPhotos){ showToast('Zadej název materiálu', 2000); return; }
   photoBufUpload('material', function(urls){
     var id = 'm_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
     var rec = { nazev:nazev, so:so, uid:window.currentUser.uid, name:window.currentUser.name, ts:Date.now() };
+    if(pozn) rec.poznamka = pozn;
     if(urls && urls.length) rec.photos = urls;
     _matList()[id] = rec;
     diarySaveDay();
     document.getElementById('mat-nazev').value = '';
     document.getElementById('mat-so').value = '';
+    if(document.getElementById('mat-poznamka')) document.getElementById('mat-poznamka').value = '';
     setPhotoBuf('material', []); renderPhotoBuf('material','mat-photos');
     renderMaterialy();
   });
@@ -10300,6 +10507,146 @@ function generateFullExport(){
     out.push('');
   });
   document.getElementById('diary-export-text').value = out.join('\n');
+}
+
+// ══ #62: PDF export deníku (vč. fotek) – tisk přes prohlížeč ═══════
+function _pdfInc(id){ var e = document.getElementById('pdf-inc-' + id); return !e || e.checked; }
+function generateDiaryPdf(){
+  var od = document.getElementById('exp-od').value;
+  var doDate = document.getElementById('exp-do').value;
+  if(!od || !doDate){ showToast('Vyber rozsah dat', 1500); return; }
+  if(od > doDate){ showToast('Datum od je větší než do', 2000); return; }
+  var keys = Object.keys(window.diaryAllDays || {}).filter(function(dt){ return dt >= od && dt <= doDate; }).sort();
+  if(!keys.length){ showToast('V rozsahu nejsou žádné zápisy', 2000); return; }
+  var incFoto = _pdfInc('foto');
+  showSync('⏳ Připravuji PDF…');
+  // Zkoušky podle dne
+  var zkByDay = {};
+  Object.keys(window.allZkousky || {}).forEach(function(id){ var z = window.allZkousky[id]; if(z && z.datum){ (zkByDay[z.datum] = zkByDay[z.datum] || []).push(z); } });
+  // Samostatné fotky podle dne (jen pokud chceme fotky)
+  var stdByDay = {};
+  var stdPromise = incFoto ? db.ref('standalone_photos').once('value').then(function(s){
+    s.forEach(function(ch){ var v = ch.val() || {}; var day = (typeof itemDateYmd === 'function') ? itemDateYmd(v) : ''; if(day){ (stdByDay[day] = stdByDay[day] || []).push(v); } });
+  }) : Promise.resolve();
+  stdPromise.then(function(){
+    // posbírej všechny URL fotek k předrozřešení (token-URL do nového okna)
+    var refs = [];
+    if(incFoto) keys.forEach(function(dt){
+      var d = window.diaryAllDays[dt] || {};
+      if(_pdfInc('materialy') && d.materialyList) Object.keys(d.materialyList).forEach(function(id){ (d.materialyList[id].photos || []).forEach(function(u){ if(u) refs.push(u); }); });
+      if(_pdfInc('zkousky')) (zkByDay[dt] || []).forEach(function(z){ (z.photos || []).forEach(function(u){ if(u) refs.push(u); }); });
+      (stdByDay[dt] || []).forEach(function(v){ if(v.url) refs.push(v.url); });
+    });
+    var uniq = Array.from(new Set(refs));
+    return Promise.all(uniq.map(function(u){ return resolveFileUrl(u).then(function(r){ return [u, r]; }).catch(function(){ return [u, u]; }); }))
+      .then(function(pairs){ var map = {}; pairs.forEach(function(p){ map[p[0]] = p[1]; }); return map; });
+  }).then(function(urlMap){
+    var html = _buildDiaryPdfHtml(keys, od, doDate, { zkByDay: zkByDay, stdByDay: stdByDay, urlMap: urlMap, incFoto: incFoto });
+    hideSync();
+    var w = window.open('', '_blank');
+    if(!w){ showToast('⚠️ Povol pop-upy – PDF se otevře v novém okně', 3800); return; }
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(function(){ try { w.focus(); w.print(); } catch(e){} }, 700);
+  }).catch(function(e){ hideSync(); console.error('diary pdf:', e); showToast('❌ PDF se nepodařilo vytvořit', 3000); });
+}
+function _buildDiaryPdfHtml(keys, od, doDate, ctx){
+  var U = function(u){ return (ctx.urlMap && ctx.urlMap[u]) || u; };
+  var esc = escapeHtml;
+  function photoGrid(urls){
+    urls = (urls || []).filter(Boolean);
+    if(!ctx.incFoto || !urls.length) return '';
+    return '<div class="pg">' + urls.map(function(u){ return '<img src="' + esc(U(u)) + '">'; }).join('') + '</div>';
+  }
+  var body = '';
+  keys.forEach(function(dt){
+    var d = window.diaryAllDays[dt] || {};
+    var dO = ymd_to_date(dt);
+    var head = dO.toLocaleDateString('cs-CZ', {day:'numeric', month:'long', year:'numeric'}) + ' · ' + dayOfWeekCs(dO) + (isWeekend(dO) ? ' (víkend)' : '');
+    var sec = '';
+    var meta = [];
+    if(d.pocasi) meta.push('Počasí: ' + esc(d.pocasi));
+    var kont = []; if(d.tds) kont.push('TDS'); if(d.bozp) kont.push('BOZP'); if(kont.length) meta.push('Kontroly: ' + kont.join(', '));
+    if(meta.length) sec += '<div class="meta">' + meta.join(' &nbsp;·&nbsp; ') + '</div>';
+    // Šichtovka
+    if(_pdfInc('sichtovka') && d.sichtovka){
+      var pozn = d.sichtovka_pozn || {};
+      var rows = Object.keys(d.sichtovka).map(function(uid){
+        var w = lookupWorker(uid); var h = parseFloat(d.sichtovka[uid]); if(isNaN(h) || h <= 0) return null;
+        return { name: (w && w.name) || ('id:' + uid), firma: (w && w.firma) || '', h: h, so: effectiveSOForId(uid, dt, 'osoby') || '', pozn: pozn[uid] || '' };
+      }).filter(Boolean).sort(function(a,b){ return a.name.localeCompare(b.name, 'cs'); });
+      if(rows.length){
+        var tot = 0;
+        sec += '<h4>👷 Šichtovka</h4><table><tr><th>Jméno</th><th>Firma</th><th>SO</th><th class="r">Hod.</th><th>Poznámka</th></tr>' +
+          rows.map(function(r){ tot += r.h; return '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.firma) + '</td><td>' + esc(r.so) + '</td><td class="r">' + r.h.toFixed(1) + '</td><td>' + esc(r.pozn) + '</td></tr>'; }).join('') +
+          '<tr class="tot"><td colspan="3">Celkem (' + rows.length + ' osob)</td><td class="r">' + tot.toFixed(1) + '</td><td></td></tr></table>';
+      }
+    }
+    // Stroje
+    if(_pdfInc('stroje') && d.stroje){
+      var spz = d.stroje_pozn || {};
+      var sr = Object.keys(d.stroje).map(function(id){
+        var s = lookupStroj(id); var h = parseFloat(d.stroje[id]); if(isNaN(h) || h <= 0) return null;
+        return { name: (s && s.nazev) || ('id:' + id), firma: (s && s.firma) || '', so: effectiveSOForId(id, dt, 'stroje') || '', h: h, pozn: spz[id] || '' };
+      }).filter(Boolean).sort(function(a,b){ return a.name.localeCompare(b.name, 'cs'); });
+      if(sr.length){
+        sec += '<h4>🚜 Stroje</h4><table><tr><th>Stroj</th><th>Firma</th><th>SO</th><th class="r">Hod.</th><th>Poznámka</th></tr>' +
+          sr.map(function(r){ return '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.firma) + '</td><td>' + esc(r.so) + '</td><td class="r">' + r.h.toFixed(1) + '</td><td>' + esc(r.pozn) + '</td></tr>'; }).join('') + '</table>';
+      }
+    }
+    // Materiály
+    if(_pdfInc('materialy') && d.materialyList){
+      var ms = Object.keys(d.materialyList).map(function(id){ var x = d.materialyList[id]; x._id = id; return x; }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+      if(ms.length){
+        sec += '<h4>🚛 Materiály / mechanizace</h4>' + ms.map(function(x){
+          return '<div class="item"><b>' + esc(x.nazev||'—') + '</b>' + (x.so ? ' <span class="so">' + esc(x.so) + '</span>' : '') +
+            (x.poznamka ? '<div class="note">📝 ' + esc(x.poznamka) + '</div>' : '') + photoGrid(x.photos) + '</div>';
+        }).join('');
+      }
+    }
+    // Záznamy
+    if(_pdfInc('zaznamy') && d.zaznamy){
+      var zs = Object.keys(d.zaznamy).map(function(id){ return d.zaznamy[id]; }).sort(function(a,b){ return (a.time||0)-(b.time||0); });
+      if(zs.length){
+        sec += '<h4>📝 Záznamy</h4>' + zs.map(function(z){
+          var t = z.time ? new Date(z.time) : null; var hh = t ? (String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0')) : '';
+          return '<div class="item"><span class="tm">' + hh + '</span> <b>' + esc(z.name||'?') + '</b>: ' + esc(z.text||'') + photoGrid(z.photos) + '</div>';
+        }).join('');
+      }
+    }
+    // Zkoušky
+    if(_pdfInc('zkousky') && (ctx.zkByDay[dt] || []).length){
+      sec += '<h4>🔬 Zkoušky</h4>' + ctx.zkByDay[dt].map(function(z){
+        var m = [z.so, z.vrstva, z.material, (z.vysledek ? ('výsledek: ' + z.vysledek) : ''), (z.protokol ? 'protokol ✓' : '⚠️ bez protokolu')].filter(Boolean).join(' · ');
+        return '<div class="item"><b>' + esc(z.nazev||'zkouška') + '</b>' + (m ? '<div class="note">' + esc(m) + '</div>' : '') + photoGrid(z.photos) + '</div>';
+      }).join('');
+    }
+    // Fotky dne (samostatné)
+    if(ctx.incFoto && (ctx.stdByDay[dt] || []).length){
+      sec += '<h4>📷 Fotky dne</h4>' + photoGrid((ctx.stdByDay[dt] || []).map(function(v){ return v.url; }));
+    }
+    if(d.zaver) sec += '<h4>Závěr dne</h4><div class="item">' + esc(d.zaver).replace(/\n/g,'<br>') + '</div>';
+    if(!sec) sec = '<div class="meta">(žádné vybrané položky)</div>';
+    body += '<section><h3>' + esc(head) + '</h3>' + sec + '</section>';
+  });
+  return '<!doctype html><html lang="cs"><head><meta charset="utf-8"><title>Stavební deník D11 1108 ' + esc(od) + ' – ' + esc(doDate) + '</title>' +
+    '<style>' +
+    'body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:22px;font-size:12px;}' +
+    'h1{font-size:18px;margin:0 0 2px;}h2{font-size:12px;font-weight:400;color:#555;margin:0 0 14px;}' +
+    'section{page-break-inside:avoid;border-top:2px solid #333;padding-top:8px;margin-top:16px;}' +
+    'h3{font-size:14px;background:#f0f0f0;padding:5px 8px;margin:0 0 8px;border-left:4px solid #c0392b;}' +
+    'h4{font-size:12px;margin:12px 0 4px;color:#c0392b;}' +
+    '.meta{color:#555;margin-bottom:6px;}' +
+    'table{border-collapse:collapse;width:100%;margin:2px 0 8px;}' +
+    'th,td{border:1px solid #bbb;padding:4px 6px;text-align:left;font-size:11px;vertical-align:top;}' +
+    'th{background:#eee;}td.r,th.r{text-align:right;}tr.tot td{font-weight:700;background:#f7f7f7;}' +
+    '.item{margin:4px 0 8px;padding-left:2px;}.so{color:#c0392b;font-size:10px;}.note{color:#555;font-size:11px;margin:2px 0;}' +
+    '.tm{color:#888;font-variant-numeric:tabular-nums;}' +
+    '.pg{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0;}.pg img{width:150px;height:113px;object-fit:cover;border:1px solid #ccc;border-radius:3px;}' +
+    '@media print{body{margin:10mm;} .pg img{width:130px;height:98px;}}' +
+    '</style></head><body>' +
+    '<h1>Stavební deník — D11 1108 Jaroměř – Trutnov</h1>' +
+    '<h2>Rozsah: ' + esc(od) + ' – ' + esc(doDate) + ' · Vygenerováno: ' + esc(new Date().toLocaleString('cs-CZ')) + '</h2>' +
+    body + '</body></html>';
 }
 
 // ── Export: Jen šichtovka po firmách (podklad pro fakturaci) ───────
@@ -11762,7 +12109,7 @@ function copyDiaryExport(){
     </div>
     <div id="photo-fs-comments-list" style="flex:1;overflow-y:auto;padding:10px 14px;"></div>
     <div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);padding-bottom:calc(10px + env(safe-area-inset-bottom));">
-      <input id="photo-fs-comment-input" type="text" placeholder="Napsat komentář…" style="flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:14px;" onkeydown="if(event.key==='Enter')addPhotoComment()">
+      <input id="photo-fs-comment-input" type="text" placeholder="Napsat komentář… (@ zmíní kolegu)" style="flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:14px;" oninput="_onCommentInput(this)" onkeydown="if(event.key==='Enter'){_hideMentionPop();addPhotoComment();}">
       <button onclick="addPhotoComment()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;">Odeslat</button>
     </div>
   </div>
@@ -12415,7 +12762,7 @@ function copyDiaryExport(){
     <label style="margin-top:6px;">Komentáře</label>
     <div id="td-comments"></div>
     <div style="display:flex;gap:6px;">
-      <input type="text" class="task-field" id="td-cmt-input" placeholder="Napsat komentář…" onkeydown="if(event.key==='Enter')addComment()">
+      <input type="text" class="task-field" id="td-cmt-input" placeholder="Napsat komentář… (@ zmíní kolegu)" oninput="_onCommentInput(this)" onkeydown="if(event.key==='Enter'){_hideMentionPop();addComment();}">
       <button class="btn-primary" style="flex:0 0 auto;padding:0 14px;" onclick="addComment()">Odeslat</button>
     </div>
 
@@ -12446,6 +12793,24 @@ function copyDiaryExport(){
     <div class="so-pick-title">🏗️ Přiřadit fotku k objektu</div>
     <div id="so-pick-sub" class="so-pick-subtitle">Vyber stavební objekt pro tuto fotku</div>
     <div id="so-pick-list"></div>
+  </div>
+</div>
+
+<!-- #58: multi-výběr SO pro osobu/stroj v šichtovce -->
+<div id="sicht-so-modal" style="display:none;position:fixed;inset:0;z-index:9990;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:18px;">
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;width:min(94vw,440px);max-height:88vh;display:flex;flex-direction:column;padding:16px;">
+    <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px;">🏗️ SO k osobě / stroji</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Můžeš vybrat víc objektů. Platí od tohohle dne dál.</div>
+    <div id="sicht-so-list" style="overflow-y:auto;flex:1;min-height:60px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;">
+      <input type="text" id="sicht-so-custom" placeholder="+ vlastní SO (např. SO 108)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 10px;font-size:13px;" onkeydown="if(event.key==='Enter')_sichtSoAddCustom()">
+      <button onclick="_sichtSoAddCustom()" style="background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:0 12px;font-size:13px;cursor:pointer;">Přidat</button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="_sichtSoNone()" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;font-size:13px;cursor:pointer;">⊘ Bez SO</button>
+      <button onclick="saveSichtSo()" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:11px;font-size:15px;font-weight:700;cursor:pointer;">Uložit</button>
+      <button onclick="closeSichtSo()" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;font-size:13px;cursor:pointer;">Zrušit</button>
+    </div>
   </div>
 </div>
 
@@ -12563,6 +12928,7 @@ function copyDiaryExport(){
         <input class="diary-field" id="mat-so" list="mat-so-list" placeholder="SO (volitelně)" style="flex:1;min-width:90px;">
         <datalist id="mat-so-list"></datalist>
       </div>
+      <input class="diary-field" id="mat-poznamka" placeholder="📝 Poznámka k tomuto materiálu (volitelně)" style="width:100%;box-sizing:border-box;margin-top:6px;">
       <div id="mat-photos" style="display:flex;flex-wrap:wrap;gap:6px;min-height:4px;margin-top:6px;"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
         <button type="button" class="btn-secondary" style="flex:1;min-width:86px;font-size:12px;padding:7px;cursor:pointer;border-radius:8px;" onclick="document.getElementById('mat-photo-cam').click()">📷 Dodák</button>
@@ -12708,6 +13074,20 @@ function copyDiaryExport(){
     <div style="display:flex;gap:8px;">
       <button class="btn-primary" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;" onclick="copyDiaryExport()">📋 Zkopírovat</button>
       <button class="btn-secondary" style="flex:1;background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer;" onclick="closeDiaryExport()">Zavřít</button>
+    </div>
+    <!-- #62: PDF export (vč. fotek) -->
+    <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;">🖨️ PDF deníku (rozsah nahoře)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px 14px;font-size:12px;color:var(--text2);margin-bottom:8px;">
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-sichtovka" checked> Šichtovka</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-stroje" checked> Stroje</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-materialy" checked> Materiály</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-zaznamy" checked> Záznamy</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-zkousky" checked> Zkoušky</label>
+        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="pdf-inc-foto" checked> Fotky</label>
+      </div>
+      <button class="btn-primary" style="width:100%;background:#c0392b;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;cursor:pointer;" onclick="generateDiaryPdf()">🖨️ Vytvořit PDF</button>
+      <div style="font-size:10px;color:var(--text2);margin-top:4px;font-style:italic;">Otevře se náhled v novém okně → „Uložit jako PDF". (Povol pop-upy.)</div>
     </div>
   </div>
 </div>

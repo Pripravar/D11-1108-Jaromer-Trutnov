@@ -38,7 +38,7 @@ exports.sendTaskNotifications = functions
     if(!rec) return null;
 
     // Sestavit titulek a tělo zprávy podle typu
-    let title = 'Sulice – Želivec';
+    let title = 'D11 1108 Jaroměř – Trutnov';
     let body  = '';
     let recipientUids = [];
 
@@ -52,11 +52,19 @@ exports.sendTaskNotifications = functions
       // Posíláme zadavateli (pokud zadavatel != ten, kdo úkol dokončil - tady jsme záměrně laxní)
       if(rec.zadalUid) recipientUids.push(rec.zadalUid);
     } else if(rec.typ === 'komentar') {
-      title = '💬 Nový komentář';
-      body = 'Komentář k úkolu "' + (rec.title || '') + '"';
-      // Posíláme zadavateli i všem přiřazeným
+      const by = rec.byName || 'Někdo';
+      title = '💬 ' + by + ' – komentář';
+      body = (rec.cmtText ? rec.cmtText : 'Komentář') + ' · úkol "' + (rec.title || '') + '"';
+      // Posíláme zadavateli, všem přiřazeným I @zmíněným (i když nejsou přiřazení)
       if(rec.zadalUid) recipientUids.push(rec.zadalUid);
       (rec.prirazeno || []).forEach(p => { if(p.uid) recipientUids.push(p.uid); });
+      (rec.mentions || []).forEach(uid => { if(uid) recipientUids.push(uid); });
+    } else if(rec.typ === 'foto_komentar') {
+      const by = rec.byName || 'Někdo';
+      title = '💬 ' + by + ' – komentář k fotce';
+      body = rec.cmtText ? rec.cmtText : 'Nový komentář k fotce';
+      // Příjemce spočítal klient (autor fotky + dřívější komentující + @zmínění, bez sebe)
+      (rec.recipientUids || []).forEach(uid => { if(uid) recipientUids.push(uid); });
     }
 
     // Odstranit duplicity
@@ -93,6 +101,7 @@ exports.sendTaskNotifications = functions
       notification: { title, body },
       data: {
         taskId: rec.taskId || '',
+        fotoKey: rec.fotoKey || '',
         typ:    rec.typ    || '',
         priorita: prio
       },
