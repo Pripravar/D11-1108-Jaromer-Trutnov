@@ -1136,6 +1136,7 @@ document.addEventListener('touchend', function(e){
   <!-- ❓ musí být PRVNÍ tlačítko: #header roluje vodorovně, na konci by bylo mimo obrazovku -->
   <button id="btn-help" onclick="openHelp()" title="Nápověda / návod k aplikaci" style="background:var(--panel2);border:1px solid var(--accent2);border-radius:8px;color:var(--accent2);padding:6px 10px;font-size:15px;cursor:pointer;font-weight:700;">❓</button>
   <button id="btn-tasks" onclick="openTasksPanel()" title="Úkoly" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">✅<span class="task-badge" id="task-badge">0</span></button>
+  <button id="btn-activity" onclick="openActivity()" title="Co se děje – novinky v appce a aktivita týmu" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;position:relative;">📢<span id="activity-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e94560;color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 3px;text-align:center;box-sizing:border-box;">0</span></button>
   <button id="btn-denik" onclick="openDiaryPanel()" title="Deník stavby" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📓</button>
   <button id="btn-kzp"   onclick="openKzpPanel()"   title="Kvalita / KZP"   style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🧪</button>
   <button id="btn-standalone-foto" onclick="takeStandalonePhoto()" title="Vyfotit" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📷</button>
@@ -2719,6 +2720,8 @@ function init() {
   loadCategoryPerms(); // výchozí práva kategorií (sub/investor)
   loadDokumenty();    // modul Dokumenty (KZP/TePř/protokoly)
   loadZkousky();      // modul Zkoušky na stavbě (+ body v mapě)
+  loadMjList();       // #71b: sdílené jednotky materiálu
+  loadActivity();     // #75/#77: feed aktivity „Co se děje"
   initLongPress();
   // Zastavit touch eventy z panelů aby nešly do Leaflet mapy
   ['pdf-panel','prop-panel'].forEach(function(id) {
@@ -3693,6 +3696,9 @@ function openPhotoFs(src, firebaseKey, item) {
   // Přeřadit SO smí kdokoliv přihlášený (neškodná úprava zatřídění)
   var soBtn = document.getElementById('photo-fs-menu-soedit');
   if(soBtn) soBtn.style.display = (_photoFsKey && window.currentUser) ? 'block' : 'none';
+  // #72: přeřadit/smazat km – stejná podmínka jako SO
+  var kmBtn = document.getElementById('photo-fs-menu-kmedit');
+  if(kmBtn) kmBtn.style.display = (_photoFsKey && window.currentUser) ? 'block' : 'none';
   // 🗺️ Mapa jen když fotka má souřadnice
   var mapBtn = document.getElementById('photo-fs-map');
   if(mapBtn) mapBtn.style.display = (_photoFsItem && _photoFsItem.lat && _photoFsItem.lng) ? 'inline-block' : 'none';
@@ -3703,17 +3709,7 @@ function openPhotoFs(src, firebaseKey, item) {
   if(shSub){ shSub.style.display = canShare ? 'block' : 'none'; shSub.textContent = (_photoFsItem.sdilenoSub ? '✅ Sdíleno subce (zrušit)' : '👷 Sdílet subce'); }
   if(shInv){ shInv.style.display = canShare ? 'block' : 'none'; shInv.textContent = (_photoFsItem.sdilenoInvestor ? '✅ Sdíleno investorovi (zrušit)' : '🏛️ Sdílet investorovi'); }
   // Popiska pod fotkou
-  var cap = document.getElementById('photo-fs-caption');
-  if(cap){
-    var parts = [];
-    if(_photoFsItem.author) parts.push('📷 ' + _photoFsItem.author);
-    if(_photoFsItem.km) parts.push('km ' + _photoFsItem.km);
-    var soTxt = (_photoFsItem.soList && _photoFsItem.soList.length) ? _photoFsItem.soList.join(', ') : (_photoFsItem.so || '');
-    if(soTxt) parts.push('🏗️ ' + soTxt);
-    var dt = _photoFsItem.time || _photoFsItem.date || '';
-    if(dt) parts.push(dt);
-    cap.innerHTML = parts.map(function(p){ return escapeHtml(p); }).join(' · ');
-  }
+  _renderPhotoFsCaption(_photoFsItem);
   var menu = document.getElementById('photo-fs-menu'); if(menu) menu.style.display='none';
   var cpanel = document.getElementById('photo-fs-comments'); if(cpanel) cpanel.style.display='none';
   // Komentáře – jen u samostatných fotek (mají fbKey)
@@ -4368,6 +4364,50 @@ function editPhotoSO(){
       })
       .catch(function(){ showToast('❌ Přeřazení selhalo (pravidla?)', 3000); });
   }, preset);
+}
+// Popiska pod fotkou ve fullscreenu (autor · km · SO · datum) – sdíleno openPhotoFs i editPhotoKm/SO.
+function _renderPhotoFsCaption(it){
+  var cap = document.getElementById('photo-fs-caption'); if(!cap || !it) return;
+  var parts = [];
+  if(it.author) parts.push('📷 ' + it.author);
+  if(it.km) parts.push('km ' + it.km);
+  var soTxt = (it.soList && it.soList.length) ? it.soList.join(', ') : (it.so || '');
+  if(soTxt) parts.push('🏗️ ' + soTxt);
+  var dt = it.time || it.date || '';
+  if(dt) parts.push(dt);
+  cap.innerHTML = parts.map(function(p){ return escapeHtml(p); }).join(' · ');
+}
+
+// #72: přeřadit/smazat staničení (km) fotky – samostatně od SO. Prázdné = smazat km i polohu.
+function editPhotoKm(){
+  if(!_photoFsKey){ showToast('Fotku nelze upravit', 2000); return; }
+  if(!window.currentUser){ showToast('Pro úpravu se přihlas', 2500); return; }
+  var key = _photoFsKey, item = _photoFsItem;
+  var cur = (item && item.km) ? String(item.km) : '';
+  var val = prompt('Staničení (km) – např. 128,350 nebo 0+150.\nPrázdné pole = smazat km i polohu na mapě:', cur);
+  if(val === null) return;
+  val = (val || '').trim();
+  var upd = { restampOnDownload: true };
+  if(!val){
+    upd.km = null; upd.lat = null; upd.lng = null;
+  } else {
+    var kmNum = parseKmStr(val);
+    if(kmNum === null){ showToast('❌ Nerozumím staničení', 2500); return; }
+    upd.km = val;
+    var ll = realKmToLatLng(kmNum);
+    if(ll){ upd.lat = ll[0]; upd.lng = ll[1]; } else { upd.lat = null; upd.lng = null; }
+  }
+  db.ref('standalone_photos/' + key).update(upd).then(function(){
+    if(item){ item.km = upd.km; item.lat = upd.lat; item.lng = upd.lng; item.restampOnDownload = true; }
+    showToast(val ? ('📍 Staničení: ' + val) : '📍 Staničení smazáno', 1800);
+    if(_photoFsKey === key){
+      _renderPhotoFsCaption(item);
+      var mapBtn = document.getElementById('photo-fs-map');
+      if(mapBtn) mapBtn.style.display = (item && item.lat && item.lng) ? 'inline-block' : 'none';
+    }
+    if(document.getElementById('gallery-modal').classList.contains('open')) renderGallery();
+    _restampPhotoNow(item, key);   // #59: přerazítkovat z čistého originálu s novým km
+  }).catch(function(){ showToast('❌ Úprava selhala (pravidla?)', 3000); });
 }
 // #59: přerazítkovat JEDNU fotku hned po přeřazení SO (z čistého originálu s novým SO).
 // POJISTKA: bez item.urlOriginal se nedělá (staré fotky bez originálu → jinak dvojité razítko;
@@ -6440,7 +6480,7 @@ function _processPhotoJob(job, done){
               if(meta.sdilenoInvestor) entry.sdilenoInvestor = true;
               if(typeof isSubOnly==='function' && isSubOnly()){ entry.zdroj = 'SUB'; entry.sub = true; }
               db.ref('standalone_photos/' + String(t)).set(entry)
-                .then(function(){ done(true); })
+                .then(function(){ if(typeof _logPhotoActivity==='function') _logPhotoActivity(meta.so || (meta.soList && meta.soList[0]) || ''); done(true); })
                 .catch(function(){ done(false); });
             }
             if(!thumbData){ finishEntry(null); return; }
@@ -7969,7 +8009,7 @@ function saveZkouska(){
     rec.photos = urls && urls.length ? urls : null;
     var ref = id ? db.ref('zkousky/'+id) : db.ref('zkousky').push();
     ref.set(rec)
-      .then(function(){ showToast('✅ Zkouška uložena', 1800); closeZkouskaForm(); })
+      .then(function(){ showToast('✅ Zkouška uložena', 1800); closeZkouskaForm(); if(!id && typeof logActivity==='function') logActivity('🧫', 'zadal/a zkoušku ' + (nazev || '') + (rec.so ? (' · ' + rec.so) : '')); })
       .catch(function(){ showToast('❌ Uložení selhalo', 2500); });
   });
 }
@@ -8003,6 +8043,98 @@ function setZkouskyVisible(on){
   var cb=document.getElementById('lyr-zkousky'); if(cb) cb.checked=!!on;
   if(on){ renderZkouskyMarkers(); zkouskyLayer.addTo(map); }
   else if(map.hasLayer(zkouskyLayer)) map.removeLayer(zkouskyLayer);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//   #75/#77: Feed „Co se děje" – 🆕 novinky v appce + 📢 aktivita lidí
+// ════════════════════════════════════════════════════════════════════
+// 🆕 Novinky v appce (udržuje vývojář, nejnovější nahoře). S každou novou funkcí přidej řádek.
+var APP_NOVINKY = [
+  { datum:'2026-07-15', text:'Nový feed „Co se děje". 🚛 Náklaďáky v deníku, materiály s počtem a měrnou jednotkou, řazení strojů (firma/SO/A–Z), hromadné „✓ Vybraným" v šichtovce i strojích, 📋 dopodepsání převzatým podpisem, 📍 přeřazení/smazání km u fotky, plnější textový i PDF export deníku.' }
+];
+var _activityCache = [];
+var _activityTab = 'novinky';
+// Zaloguj akci do centrálního feedu. text = věta bez jména (jméno vede zvlášť).
+function logActivity(emoji, text){
+  if(typeof db === 'undefined' || !window.currentUser) return;
+  try {
+    db.ref('aktivita').push({
+      emoji: emoji || '•',
+      kdo: (window.currentUser && window.currentUser.name) || '',
+      uid: (window.currentUser && window.currentUser.uid) || '',
+      text: text || '',
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  } catch(e){}
+}
+// Fotky: throttle 90 s na SO, aby série nezaplavila feed.
+var _photoActLast = {};
+function _logPhotoActivity(so){
+  var key = so || '_';
+  var now = Date.now();
+  if(_photoActLast[key] && (now - _photoActLast[key]) < 90000) return;
+  _photoActLast[key] = now;
+  logActivity('📷', 'přidal/a fotky' + (so ? (' k ' + so) : ''));
+}
+function loadActivity(){
+  if(typeof db === 'undefined') return;
+  db.ref('aktivita').orderByChild('ts').limitToLast(80).on('value', function(snap){
+    var arr = []; snap.forEach(function(ch){ var v = ch.val()||{}; v._k = ch.key; arr.push(v); });
+    arr.reverse();   // nejnovější nahoře
+    _activityCache = arr;
+    _updateActivityBadge();
+    var m = document.getElementById('activity-modal');
+    if(m && m.style.display === 'flex') _renderActivity();
+  });
+}
+function _updateActivityBadge(){
+  var badge = document.getElementById('activity-badge'); if(!badge) return;
+  var meUid = (window.currentUser && window.currentUser.uid) || null;
+  var seenTs = parseInt(localStorage.getItem('activitySeenTs'), 10) || 0;
+  var seenNov = localStorage.getItem('novinkySeenDatum') || '';
+  var novaAkt = _activityCache.filter(function(a){ return (a.ts||0) > seenTs && a.uid !== meUid; }).length;
+  var novaNov = APP_NOVINKY.filter(function(n){ return n.datum > seenNov; }).length;
+  var total = novaAkt + novaNov;
+  if(total > 0){ badge.textContent = total > 99 ? '99+' : total; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+}
+function openActivity(){
+  var m = document.getElementById('activity-modal'); if(!m) return;
+  m.style.display = 'flex';
+  setActivityTab(_activityTab || 'novinky');
+  // označit obojí za viděné
+  var maxTs = 0; _activityCache.forEach(function(a){ if((a.ts||0) > maxTs) maxTs = a.ts||0; });
+  if(maxTs) localStorage.setItem('activitySeenTs', String(maxTs));
+  var maxNov = ''; APP_NOVINKY.forEach(function(n){ if(n.datum > maxNov) maxNov = n.datum; });
+  if(maxNov) localStorage.setItem('novinkySeenDatum', maxNov);
+  _updateActivityBadge();
+}
+function closeActivity(){ var m = document.getElementById('activity-modal'); if(m) m.style.display = 'none'; }
+function setActivityTab(t){
+  _activityTab = t;
+  var tn = document.getElementById('act-tab-novinky'), ta = document.getElementById('act-tab-aktivita');
+  if(tn){ tn.style.borderColor = (t==='novinky'?'var(--accent)':'var(--border)'); tn.style.color = (t==='novinky'?'var(--accent)':'var(--text)'); }
+  if(ta){ ta.style.borderColor = (t==='aktivita'?'var(--accent)':'var(--border)'); ta.style.color = (t==='aktivita'?'var(--accent)':'var(--text)'); }
+  _renderActivity();
+}
+function _renderActivity(){
+  var box = document.getElementById('activity-list'); if(!box) return;
+  if(_activityTab === 'novinky'){
+    box.innerHTML = APP_NOVINKY.length ? APP_NOVINKY.map(function(n){
+      var d = ymd_to_date(n.datum);
+      var dstr = d ? d.toLocaleDateString('cs-CZ', {day:'numeric',month:'long',year:'numeric'}) : n.datum;
+      return '<div style="padding:10px 4px;border-bottom:1px solid var(--border);">'
+        +'<div style="font-size:11px;color:var(--accent2);font-weight:700;margin-bottom:3px;">🆕 '+escapeHtml(dstr)+(n.verze?(' · '+escapeHtml(n.verze)):'')+'</div>'
+        +'<div style="font-size:13px;color:var(--text);white-space:pre-wrap;">'+escapeHtml(n.text)+'</div></div>';
+    }).join('') : '<div style="color:var(--text2);font-size:13px;padding:14px;text-align:center;">Zatím žádné novinky.</div>';
+  } else {
+    box.innerHTML = _activityCache.length ? _activityCache.map(function(a){
+      return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid var(--border);">'
+        +'<span style="font-size:16px;flex:0 0 auto;">'+escapeHtml(a.emoji||'•')+'</span>'
+        +'<div style="flex:1;min-width:0;font-size:13px;color:var(--text);"><b>'+escapeHtml(a.kdo||'?')+'</b> '+escapeHtml(a.text||'')
+        +'<div style="font-size:11px;color:var(--text2);margin-top:1px;">'+(a.ts?_relTime(a.ts):'')+'</div></div></div>';
+    }).join('') : '<div style="color:var(--text2);font-size:13px;padding:14px;text-align:center;">Zatím žádná aktivita.</div>';
+  }
 }
 
 // Relativní čas „● online" / „před X"
@@ -8796,6 +8928,10 @@ function saveTaskFromForm() {
     var _pripo = _buildPripominka(deadline);
     task.pripominka = _pripo || null;
     saveTaskToFirebase(task, function(){
+      if(!existing && typeof logActivity==='function'){
+        var pro = (window.newTaskAssignees && window.newTaskAssignees.length) ? (' pro ' + window.newTaskAssignees.map(function(a){ return a.name; }).join(', ')) : '';
+        logActivity('✅', 'zadal/a úkol „' + title + '"' + pro);
+      }
       closeNewTaskModal();
     });
   }
@@ -9405,12 +9541,18 @@ function openSichtSoPicker(id, kind){
 }
 function _renderSichtSoList(){
   var st = _sichtSoState; if(!st) return;
-  var sos = []; try { sos = Array.from(getAllProjectSOs()); } catch(e){}
-  Object.keys(st.sel).forEach(function(s){ if(sos.indexOf(s) < 0) sos.unshift(s); });   // aktuální mimo katalog nahoru
+  // #66: katalog SO s popisky (id + short), sjednoceno s výběrem u fotek – místo holých getAllProjectSOs
+  var pool = [], seen = {};
+  function add(o){ if(!o || !o.id || seen[o.id]) return; seen[o.id] = 1; pool.push({ id:o.id, short:o.short||'' }); }
+  try { (typeof SO_CATALOG!=='undefined'?SO_CATALOG:[]).forEach(add); } catch(e){}
+  try { (typeof customSO!=='undefined'?customSO:[]).forEach(add); } catch(e){}
+  // vybrané SO mimo katalog nahoru (ať jdou odškrtnout)
+  Object.keys(st.sel).forEach(function(id){ if(!seen[id]){ seen[id] = 1; pool.unshift({ id:id, short:'' }); } });
   var box = document.getElementById('sicht-so-list'); if(!box) return;
-  box.innerHTML = sos.length ? sos.map(function(s){
+  box.innerHTML = pool.length ? pool.map(function(o){
+    var lbl = o.id + (o.short ? ' — ' + o.short : '');
     return '<label style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--border);cursor:pointer;font-size:14px;">'+
-      '<input type="checkbox" ' + (st.sel[s] ? 'checked' : '') + ' onchange="_sichtSoToggle(\'' + encodeURIComponent(s) + '\',this.checked)" style="width:18px;height:18px;flex:0 0 auto;"> ' + escapeHtml(s) + '</label>';
+      '<input type="checkbox" ' + (st.sel[o.id] ? 'checked' : '') + ' onchange="_sichtSoToggle(\'' + encodeURIComponent(o.id) + '\',this.checked)" style="width:18px;height:18px;flex:0 0 auto;"> ' + escapeHtml(lbl) + '</label>';
   }).join('') : '<div style="color:var(--text2);font-size:13px;padding:10px;">Zatím žádné SO – přidej vlastní níže.</div>';
 }
 function _sichtSoToggle(sEnc, on){
@@ -9502,15 +9644,37 @@ function renderStrojeList(){
     document.getElementById('str-total-count').textContent = '0 strojů · 0 h';
     return;
   }
+  // #67: řazení + seskupení strojů (firma / SO / abecedně) – vzor jako u lidí
+  var sortMode = localStorage.getItem('strojSort') || 'firma';
+  var sortSel = document.getElementById('str-sort'); if(sortSel) sortSel.value = sortMode;
+  arr.forEach(function(s){ s._effSo = effectiveSOForId(s.id, currentDt, 'stroje') || ''; });
+  function _strGrp(s){ return sortMode === 'firma' ? (s.firma||'').trim() : (sortMode === 'so' ? (s._effSo||'').trim() : ''); }
+  arr.sort(function(a,b){
+    if(sortMode === 'nazev') return (a.nazev||'').localeCompare(b.nazev||'', 'cs');
+    var ga = _strGrp(a), gb = _strGrp(b);
+    if(!!ga !== !!gb) return ga ? -1 : 1;
+    if(ga.toLowerCase() !== gb.toLowerCase()) return ga.localeCompare(gb, 'cs');
+    return (a.nazev||'').localeCompare(b.nazev||'', 'cs');
+  });
+  var _lastGrp = null;
   list.innerHTML = arr.map(function(s){
+    var hdr = '';
+    if(sortMode !== 'nazev'){
+      var g = _strGrp(s);
+      if(g !== _lastGrp){
+        _lastGrp = g;
+        hdr = '<div class="sht-firma-hdr" style="font-size:11px;font-weight:800;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px;padding:8px 2px 3px;border-bottom:1px solid var(--border);margin-top:4px;">'
+          + (g ? (sortMode === 'firma' ? '🏢 ' : '🏗️ ') + escapeHtml(g) : (sortMode === 'firma' ? '— bez firmy —' : '— bez SO —')) + '</div>';
+      }
+    }
     var h = hod[s.id];
     var hVal = (h === undefined || h === null || h === '') ? '' : h;
     var pVal = pozn[s.id] || '';
     var firmaHtml = s.firma ? '<span class="firma-badge">' + escapeHtml(s.firma) + '</span>' : '';
     var typBadge = s.typ ? '<span style="color:var(--text2);font-size:10px;margin-left:4px;">(' + escapeHtml(s.typ) + ')</span>' : '';
-    var effSo = effectiveSOForId(s.id, currentDt, 'stroje');
-    var soSelect = _soSelectHtml(s.id, 'stroje', effSo);
-    return '<div class="sht-row">'
+    var soSelect = _soSelectHtml(s.id, 'stroje', s._effSo);
+    return hdr + '<div class="sht-row">'
+      + '<input type="checkbox" class="str-pick" data-id="' + s.id + '" title="Vybrat pro hromadné vyplnění" style="width:16px;height:16px;flex:0 0 auto;margin-right:2px;">'
       + '<div class="sht-left">'
       +   '<div class="sht-name">🚜 ' + escapeHtml(s.nazev) + typBadge + firmaHtml + '</div>'
       +   '<input type="text" class="sht-note" placeholder="poznámka (např. porucha, plnění)" value="' + escapeHtml(pVal) + '" onchange="strojSetNote(\'' + s.id + '\', this.value)">'
@@ -9556,6 +9720,35 @@ function strojeFillAll(){
   diarySaveDay();
   renderStrojeList();
   showToast('✓ Všem strojům nastaveno ' + h + ' h', 1500);
+}
+// #67: přepnout řazení strojů
+function setStrojSort(v){ localStorage.setItem('strojSort', v || 'firma'); renderStrojeList(); }
+// #71c: hromadné vyplnění jen zaškrtnutým řádkům (0 h = smazat)
+function _toggleAllPicks(kind, on){ document.querySelectorAll('.' + kind + '-pick').forEach(function(cb){ cb.checked = !!on; }); }
+function _pickedIds(kind){ var ids = []; document.querySelectorAll('.' + kind + '-pick:checked').forEach(function(cb){ ids.push(cb.getAttribute('data-id')); }); return ids; }
+function strojeFillSelected(){
+  if(!window.diaryCurrentData) return;
+  var ids = _pickedIds('str');
+  if(!ids.length){ showToast('Zaškrtni aspoň jeden stroj', 1800); return; }
+  var h = parseFloat(document.getElementById('str-bulk-input').value);
+  if(isNaN(h) || h < 0){ showToast('Zadej počet hodin (0 = smazat)', 1800); return; }
+  if(!window.diaryCurrentData.stroje) window.diaryCurrentData.stroje = {};
+  ids.forEach(function(id){ if(h > 0) window.diaryCurrentData.stroje[id] = h; else delete window.diaryCurrentData.stroje[id]; });
+  diarySaveDay(); renderStrojeList();
+  showToast('✓ ' + ids.length + ' strojům: ' + h + ' h', 1600);
+  if(typeof logActivity==='function') logActivity('🚜', 'vyplnil/a hodiny ' + ids.length + ' strojům (' + h + ' h)');
+}
+function sichtovkaFillSelected(){
+  if(!window.diaryCurrentData) return;
+  var ids = _pickedIds('sht');
+  if(!ids.length){ showToast('Zaškrtni aspoň jednu osobu', 1800); return; }
+  var h = parseFloat(document.getElementById('sht-bulk-input').value);
+  if(isNaN(h) || h < 0){ showToast('Zadej počet hodin (0 = smazat)', 1800); return; }
+  if(!window.diaryCurrentData.sichtovka) window.diaryCurrentData.sichtovka = {};
+  ids.forEach(function(id){ if(h > 0) window.diaryCurrentData.sichtovka[id] = h; else delete window.diaryCurrentData.sichtovka[id]; });
+  diarySaveDay(); renderSichtovka();
+  showToast('✓ ' + ids.length + ' osobám: ' + h + ' h', 1600);
+  if(typeof logActivity==='function') logActivity('👷', 'vyplnil/a hodiny ' + ids.length + ' osobám (' + h + ' h)');
 }
 
 function openStrojeModal(){
@@ -9758,6 +9951,8 @@ function renderDiaryDay(){
   renderZaznamy();
   renderMaterialy();
   _fillMatSoList();
+  _fillMjSelect();
+  renderNaklad();
   renderDiaryFoto();
   // Při přepnutí dne vyprázdnit rozepsané sběrače fotek (ať nepřetečou do jiného dne)
   setPhotoBuf('zaznam', []);   renderPhotoBuf('zaznam','zaz-photos');
@@ -9772,6 +9967,33 @@ function _fillMatSoList(){
   var dl = document.getElementById('mat-so-list'); if(!dl) return;
   var sos = []; try { sos = Array.from(getAllProjectSOs()); } catch(e){}
   dl.innerHTML = sos.sort(function(a,b){ return String(a).localeCompare(b,'cs',{numeric:true}); }).map(function(s){ return '<option value="'+escapeHtml(s)+'">'; }).join('');
+}
+// #71b: sdílené jednotky materiálu (/nastaveni/mj). Default seed; admin spravuje, ostatní jen vybírají.
+window.mjList = ['m²','m³','kg','t','ks','bm','km','hod','pytel','paleta'];
+function loadMjList(){
+  if(typeof db === 'undefined') return;
+  db.ref('nastaveni/mj').on('value', function(snap){
+    var v = snap.val();
+    if(Array.isArray(v) && v.length) window.mjList = v.slice();
+    else if(v && typeof v === 'object'){ var a = Object.keys(v).map(function(k){ return v[k]; }).filter(Boolean); if(a.length) window.mjList = a; }
+    _fillMjSelect();
+  });
+}
+function _fillMjSelect(){
+  document.querySelectorAll('select.mj-select').forEach(function(sel){
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">MJ</option>' + (window.mjList || []).map(function(u){ return '<option value="'+escapeHtml(u)+'">'+escapeHtml(u)+'</option>'; }).join('');
+    if(cur) sel.value = cur;
+  });
+}
+function openMjManage(){
+  if(!(typeof isAdmin === 'function' && isAdmin())){ showToast('Jednotky spravuje jen admin', 2500); return; }
+  var v = prompt('Měrné jednotky materiálu (oddělené čárkou) – uprav seznam:', (window.mjList || []).join(', '));
+  if(v === null) return;
+  var arr = v.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  if(!arr.length){ showToast('Musí zůstat aspoň jedna jednotka', 2200); return; }
+  db.ref('nastaveni/mj').set(arr).then(function(){ showToast('✓ Jednotky uloženy', 1500); })
+    .catch(function(){ showToast('❌ Uložení selhalo (práva?)', 2800); });
 }
 function renderMaterialy(){
   var box = document.getElementById('mat-list'); if(!box) return;
@@ -9788,7 +10010,7 @@ function renderMaterialy(){
         }).join('') + '</div>' : '';
     return '<div style="padding:8px 4px;border-bottom:1px solid var(--border);">'
       +'<div style="display:flex;align-items:center;gap:8px;">'
-      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">🚛 '+escapeHtml(x.nazev||'—')+(x.so?' <span style="color:var(--accent2);font-weight:400;font-size:11px;">'+escapeHtml(x.so)+'</span>':'')+'</div>'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">🚛 '+escapeHtml(x.nazev||'—')+(x.pocet?' <span style="color:var(--text);font-weight:700;font-size:12px;">'+escapeHtml(x.pocet+(x.mj?' '+x.mj:''))+'</span>':'')+(x.so?' <span style="color:var(--accent2);font-weight:400;font-size:11px;">'+escapeHtml(x.so)+'</span>':'')+'</div>'
       +'<div style="font-size:11px;color:var(--text2);">'+escapeHtml(x.name||'')+(x.photos&&x.photos.length?(' · 📷 '+x.photos.length):'')+'</div></div>'
       +'<button onclick="materialAddPhoto(\''+x._id+'\')" title="Přidat další dodák" style="background:none;border:none;color:var(--text2);font-size:15px;cursor:pointer;padding:4px;">📷</button>'
       +(canDel?'<button onclick="materialDelete(\''+x._id+'\')" style="background:none;border:none;color:#e94560;font-size:14px;cursor:pointer;padding:4px;">🗑</button>':'')
@@ -9811,20 +10033,27 @@ function materialAdd(){
   var nazev = (document.getElementById('mat-nazev').value || '').trim();
   var so    = (document.getElementById('mat-so').value || '').trim();
   var pozn  = (document.getElementById('mat-poznamka') ? document.getElementById('mat-poznamka').value : '').trim();
+  var pocet = (document.getElementById('mat-pocet') ? document.getElementById('mat-pocet').value : '').trim();
+  var mj    = (document.getElementById('mat-mj') ? document.getElementById('mat-mj').value : '').trim();
   var hasPhotos = photoBuf('material').length > 0;
   if(!nazev && !hasPhotos){ showToast('Zadej název materiálu', 2000); return; }
   photoBufUpload('material', function(urls){
     var id = 'm_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
     var rec = { nazev:nazev, so:so, uid:window.currentUser.uid, name:window.currentUser.name, ts:Date.now() };
     if(pozn) rec.poznamka = pozn;
+    if(pocet) rec.pocet = pocet;
+    if(mj) rec.mj = mj;
     if(urls && urls.length) rec.photos = urls;
     _matList()[id] = rec;
     diarySaveDay();
     document.getElementById('mat-nazev').value = '';
     document.getElementById('mat-so').value = '';
     if(document.getElementById('mat-poznamka')) document.getElementById('mat-poznamka').value = '';
+    if(document.getElementById('mat-pocet')) document.getElementById('mat-pocet').value = '';
+    if(document.getElementById('mat-mj')) document.getElementById('mat-mj').value = '';
     setPhotoBuf('material', []); renderPhotoBuf('material','mat-photos');
     renderMaterialy();
+    if(typeof logActivity==='function') logActivity('🚛', 'přidal/a materiál ' + (nazev || '') + (pocet ? (' ' + pocet + (mj ? (' ' + mj) : '')) : ''));
   });
 }
 function materialDelete(id){
@@ -9852,6 +10081,65 @@ function materialPhotoSave(){
     setPhotoBuf('matadd', []);
     closeMaterialPhoto(); renderMaterialy();
   });
+}
+
+// ── #71d: Nákladní automobily (NA) ──────────────────────────────────
+// d.naklad[id] = {oznaceni, firma, pocet, hodiny, poznamka, uid, name, ts}
+function _nakladList(){ if(!window.diaryCurrentData) return {}; if(!window.diaryCurrentData.naklad) window.diaryCurrentData.naklad = {}; return window.diaryCurrentData.naklad; }
+function renderNaklad(){
+  var box = document.getElementById('na-list'); if(!box) return;
+  var m = (window.diaryCurrentData && window.diaryCurrentData.naklad) || {};
+  var arr = Object.keys(m).map(function(id){ var v = m[id]; v._id = id; return v; });
+  arr.sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+  var cnt = document.getElementById('na-count'); if(cnt) cnt.textContent = arr.length;
+  if(!arr.length){ box.innerHTML = '<div style="font-size:12px;color:var(--text2);padding:6px 0;">Žádné náklaďáky. Přidej níže.</div>'; return; }
+  box.innerHTML = arr.map(function(x){
+    var canDel = (typeof isOwner==='function' ? isOwner(x,'uid') : true) || (typeof isAdmin==='function' && isAdmin());
+    var meta = [x.firma, (x.pocet ? ('×'+x.pocet) : ''), (x.hodiny ? (x.hodiny+' h') : '')].filter(Boolean).join(' · ');
+    return '<div style="padding:8px 4px;border-bottom:1px solid var(--border);">'
+      +'<div style="display:flex;align-items:center;gap:8px;">'
+      +'<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;">🚛 '+escapeHtml(x.oznaceni||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--text2);">'+escapeHtml(meta)+(x.name?(' · '+escapeHtml(x.name)):'')+'</div></div>'
+      +(canDel?'<button onclick="nakladDelete(\''+x._id+'\')" style="background:none;border:none;color:#e94560;font-size:14px;cursor:pointer;padding:4px;">🗑</button>':'')
+      +'</div>'
+      +(canDel
+        ? '<input type="text" onchange="nakladSetNote(\''+x._id+'\',this.value)" placeholder="📝 Poznámka (co vezl / kam)…" value="'+escapeHtml(x.poznamka||'')+'" style="width:100%;box-sizing:border-box;margin-top:5px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12px;">'
+        : (x.poznamka ? '<div style="margin-top:5px;font-size:12px;color:var(--text2);white-space:pre-wrap;">📝 '+escapeHtml(x.poznamka)+'</div>' : ''))
+      +'</div>';
+  }).join('');
+}
+function nakladSetNote(id, val){
+  var m = _nakladList()[id]; if(!m) return;
+  if(!((typeof isOwner==='function' ? isOwner(m,'uid') : true) || (typeof isAdmin==='function' && isAdmin()))) return;
+  m.poznamka = (val||'').trim() || null;
+  diarySaveDay();
+}
+function nakladAdd(){
+  if(!window.currentUser || !window.diaryCurrentData) return;
+  var oz = (document.getElementById('na-oznaceni').value || '').trim();
+  var firma = (document.getElementById('na-firma').value || '').trim();
+  var pocet = (document.getElementById('na-pocet').value || '').trim();
+  var hodiny = (document.getElementById('na-hodiny').value || '').trim();
+  var pozn = (document.getElementById('na-poznamka').value || '').trim();
+  if(!oz){ showToast('Vyber typ náklaďáku', 2000); return; }
+  var id = 'na_' + Date.now() + '_' + Math.random().toString(36).substr(2,5);
+  var rec = { oznaceni:oz, firma:firma, uid:window.currentUser.uid, name:window.currentUser.name, ts:Date.now() };
+  if(pocet) rec.pocet = pocet;
+  if(hodiny) rec.hodiny = hodiny;
+  if(pozn) rec.poznamka = pozn;
+  _nakladList()[id] = rec;
+  diarySaveDay();
+  document.getElementById('na-firma').value=''; document.getElementById('na-pocet').value='';
+  document.getElementById('na-hodiny').value=''; document.getElementById('na-poznamka').value='';
+  renderNaklad();
+  if(typeof logActivity==='function') logActivity('🚛','přidal/a náklaďák '+oz+(firma?(' ('+firma+')'):''));
+}
+function nakladDelete(id){
+  var m = _nakladList()[id]; if(!m) return;
+  if(!((typeof isOwner==='function' ? isOwner(m,'uid') : true) || (typeof isAdmin==='function' && isAdmin()))){ showToast('Smazat může jen autor', 2500); return; }
+  if(!confirm('Smazat náklaďák „'+(m.oznaceni||'')+'"?')) return;
+  delete _nakladList()[id];
+  diarySaveDay(); renderNaklad();
 }
 
 // ── #7: Fotky dne ───────────────────────────────────────────────────
@@ -9940,6 +10228,7 @@ function renderSichtovka(){
     var effSo = effectiveSOForId(u.id, currentDt, 'osoby');
     var soSelect = _soSelectHtml(u.id, 'osoby', effSo);
     _html += '<div class="sht-row">'
+      + '<input type="checkbox" class="sht-pick" data-id="' + u.id + '" title="Vybrat pro hromadné vyplnění" style="width:16px;height:16px;flex:0 0 auto;margin-right:2px;">'
       + '<div class="sht-left">'
       +   '<div class="sht-name">' + escapeHtml(u.name) + typIcon + firmaHtml + '</div>'
       +   '<input type="text" class="sht-note" placeholder="poznámka (např. odešel k zubaři 13:00)" value="' + escapeHtml(pVal) + '" onchange="sichtovkaSetNote(\'' + u.id + '\', this.value)">'
@@ -10054,6 +10343,7 @@ function zaznamAdd(){
     setPhotoBuf('zaznam', []); renderPhotoBuf('zaznam','zaz-photos');
     renderZaznamy();
     input.value = '';
+    if(typeof logActivity==='function') logActivity('📝', 'přidal/a záznam do deníku' + (txt ? (': ' + (txt.length>40?txt.slice(0,40)+'…':txt)) : ''));
   });
 }
 
@@ -10464,7 +10754,7 @@ function generateFullExport(){
         var w = lookupWorker(uid);
         var h = parseFloat(d.sichtovka[uid]);
         if(isNaN(h) || h <= 0) return null;
-        return { name: (w && w.name) || ('id:' + uid), h: h, pozn: poznDne[uid] || '' };
+        return { name: (w && w.name) || ('id:' + uid), firma:(w&&w.firma)||'', so: effectiveSOForId(uid, dt, 'osoby')||'', h: h, pozn: poznDne[uid] || '' };
       }).filter(Boolean);
       rows.sort(function(a,b){ return a.name.localeCompare(b.name, 'cs'); });
       if(rows.length) {
@@ -10472,7 +10762,8 @@ function generateFullExport(){
         out.push('Šichtovka (hodiny bez pauz):');
         var total = 0;
         rows.forEach(function(r){
-          var ext = r.pozn ? ('   (pozn: ' + r.pozn + ')') : '';
+          var extra = [r.firma, r.so].filter(Boolean).join(', ');
+          var ext = (extra ? ('  [' + extra + ']') : '') + (r.pozn ? ('   (pozn: ' + r.pozn + ')') : '');
           out.push('  · ' + r.name + ' — ' + r.h.toFixed(1) + ' h' + ext);
           total += r.h;
         });
@@ -10494,9 +10785,64 @@ function generateFullExport(){
         });
       }
     }
+    // Stroje
+    if(d.stroje){
+      var spz = d.stroje_pozn || {};
+      var srows = Object.keys(d.stroje).map(function(id){
+        var s = lookupStroj(id); var h = parseFloat(d.stroje[id]); if(isNaN(h) || h <= 0) return null;
+        return { name:(s&&s.nazev)||('id:'+id), firma:(s&&s.firma)||'', so:effectiveSOForId(id,dt,'stroje')||'', h:h, pozn:spz[id]||'' };
+      }).filter(Boolean).sort(function(a,b){ return a.name.localeCompare(b.name,'cs'); });
+      if(srows.length){
+        out.push(''); out.push('Stroje:');
+        srows.forEach(function(r){
+          var extra = [r.firma, r.so].filter(Boolean).join(', ');
+          out.push('  · ' + r.name + ' — ' + r.h.toFixed(1) + ' h' + (extra ? ('  [' + extra + ']') : '') + (r.pozn ? ('   (pozn: ' + r.pozn + ')') : ''));
+        });
+      }
+    }
+    // Materiály (strukturovaně)
+    if(d.materialyList){
+      var mrows = Object.keys(d.materialyList).map(function(id){ return d.materialyList[id]; }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+      if(mrows.length){
+        out.push(''); out.push('Materiály / mechanizace:');
+        mrows.forEach(function(x){
+          var parts = [x.nazev||'—'];
+          if(x.pocet) parts.push(x.pocet + (x.mj ? (' ' + x.mj) : ''));
+          if(x.so) parts.push('[' + x.so + ']');
+          var line = '  · ' + parts.join('  ');
+          if(x.photos && x.photos.length) line += '  📷' + x.photos.length;
+          out.push(line);
+          if(x.poznamka) out.push('      pozn: ' + x.poznamka);
+        });
+      }
+    }
+    // Nákladní automobily
+    if(d.naklad){
+      var nrows = Object.keys(d.naklad).map(function(id){ return d.naklad[id]; }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+      if(nrows.length){
+        out.push(''); out.push('Nákladní automobily:');
+        nrows.forEach(function(x){
+          var parts = [x.oznaceni||'—'];
+          if(x.firma) parts.push(x.firma);
+          if(x.pocet) parts.push('×' + x.pocet);
+          if(x.hodiny) parts.push(x.hodiny + ' h');
+          out.push('  · ' + parts.join('  ') + (x.poznamka ? ('   (' + x.poznamka + ')') : ''));
+        });
+      }
+    }
+    // Zkoušky dne
+    var zkDay = Object.keys(window.allZkousky||{}).map(function(id){ return window.allZkousky[id]; }).filter(function(z){ return z && z.datum === dt; });
+    if(zkDay.length){
+      out.push(''); out.push('Zkoušky:');
+      zkDay.forEach(function(z){
+        var m = [z.so, z.vrstva, z.material, (z.vysledek ? ('výsledek: ' + z.vysledek) : ''), (z.verdikt ? ('[' + (z.verdikt==='vyhovel'?'vyhověl':'nevyhověl') + ']') : ''), (z.protokol ? 'protokol ✓' : '⚠️ bez protokolu')].filter(Boolean).join(' · ');
+        out.push('  · ' + (z.nazev||'zkouška') + (m ? ('  — ' + m) : ''));
+      });
+    }
+    // Volný text k materiálům (zpětná kompatibilita)
     if(d.materialy) {
       out.push('');
-      out.push('Materiály / mechanizace:');
+      out.push('Poznámka k materiálům (volný text):');
       out.push('  ' + d.materialy.split('\n').join('\n  '));
     }
     if(d.zaver) {
@@ -10593,12 +10939,20 @@ function _buildDiaryPdfHtml(keys, od, doDate, ctx){
           sr.map(function(r){ return '<tr><td>' + esc(r.name) + '</td><td>' + esc(r.firma) + '</td><td>' + esc(r.so) + '</td><td class="r">' + r.h.toFixed(1) + '</td><td>' + esc(r.pozn) + '</td></tr>'; }).join('') + '</table>';
       }
     }
+    // Nákladní automobily (NA)
+    if(_pdfInc('naklad') && d.naklad){
+      var nr = Object.keys(d.naklad).map(function(id){ return d.naklad[id]; }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
+      if(nr.length){
+        sec += '<h4>🚛 Nákladní automobily</h4><table><tr><th>Typ</th><th>Firma</th><th class="r">Počet</th><th class="r">Hod.</th><th>Poznámka</th></tr>' +
+          nr.map(function(x){ return '<tr><td>' + esc(x.oznaceni||'—') + '</td><td>' + esc(x.firma||'') + '</td><td class="r">' + esc(x.pocet||'') + '</td><td class="r">' + esc(x.hodiny||'') + '</td><td>' + esc(x.poznamka||'') + '</td></tr>'; }).join('') + '</table>';
+      }
+    }
     // Materiály
     if(_pdfInc('materialy') && d.materialyList){
       var ms = Object.keys(d.materialyList).map(function(id){ var x = d.materialyList[id]; x._id = id; return x; }).sort(function(a,b){ return (a.ts||0)-(b.ts||0); });
       if(ms.length){
         sec += '<h4>🚛 Materiály / mechanizace</h4>' + ms.map(function(x){
-          return '<div class="item"><b>' + esc(x.nazev||'—') + '</b>' + (x.so ? ' <span class="so">' + esc(x.so) + '</span>' : '') +
+          return '<div class="item"><b>' + esc(x.nazev||'—') + '</b>' + (x.pocet ? ' <b>' + esc(x.pocet + (x.mj ? (' ' + x.mj) : '')) + '</b>' : '') + (x.so ? ' <span class="so">' + esc(x.so) + '</span>' : '') +
             (x.poznamka ? '<div class="note">📝 ' + esc(x.poznamka) + '</div>' : '') + photoGrid(x.photos) + '</div>';
         }).join('');
       }
@@ -11184,6 +11538,60 @@ function deleteSignature(teprId, sigId){
   db.ref('tepr_podpisy/' + teprId + '/' + sigId).remove().then(function(){
     showToast('🗑 Smazáno', 1200);
   });
+}
+
+// #73: převzít existující podpis osoby → dopodepsat (nakreslit ho na plátno, save běžnou cestou s vybraným datem/TePř)
+function openReuseSignPicker(){
+  var modal = document.getElementById('reuse-sign-modal');
+  var box = document.getElementById('reuse-sign-list');
+  if(!modal || !box) return;
+  box.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:10px;">Načítám…</div>';
+  modal.style.display = 'flex';
+  db.ref('tepr_podpisy').once('value').then(function(snap){
+    var all = snap.val() || {};
+    var byPerson = {};   // 'jmeno|firma' → nejnovější podpis
+    Object.keys(all).forEach(function(tid){
+      var sigs = all[tid] || {};
+      Object.keys(sigs).forEach(function(sid){
+        var s = sigs[sid]; if(!s || !s.dataUrl || !s.jmeno) return;
+        var key = (s.jmeno||'').trim().toLowerCase() + '|' + (s.firma||'').trim().toLowerCase();
+        if(!byPerson[key] || (s.vytvoreno||0) > (byPerson[key].vytvoreno||0)) byPerson[key] = s;
+      });
+    });
+    var arr = Object.keys(byPerson).map(function(k){ return byPerson[k]; }).sort(function(a,b){ return (a.jmeno||'').localeCompare(b.jmeno||'', 'cs'); });
+    if(!arr.length){ box.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:10px;">Žádné uložené podpisy k převzetí.</div>'; return; }
+    box.innerHTML = arr.map(function(s){
+      var sub = [s.funkce, s.firma].filter(Boolean).join(' · ');
+      var enc = encodeURIComponent(JSON.stringify({ jmeno:s.jmeno||'', funkce:s.funkce||'', firma:s.firma||'', dataUrl:s.dataUrl||'' }));
+      return '<button onclick="_pickReuseSignature(\'' + enc + '\')" style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;text-align:left;">'
+        + '<img src="' + (s.dataUrl||'') + '" style="width:70px;height:36px;object-fit:contain;background:#fff;border-radius:4px;border:1px solid var(--border);flex:0 0 auto;">'
+        + '<span style="flex:1;min-width:0;"><span style="display:block;color:var(--text);font-weight:700;font-size:13px;">' + escapeHtml(s.jmeno||'') + '</span><span style="display:block;color:var(--text2);font-size:11px;">' + escapeHtml(sub) + '</span></span></button>';
+    }).join('');
+  }).catch(function(){ box.innerHTML = '<div style="color:#e94560;font-size:13px;padding:10px;">Chyba načtení podpisů.</div>'; });
+}
+function closeReuseSignPicker(){ var m = document.getElementById('reuse-sign-modal'); if(m) m.style.display = 'none'; }
+function _pickReuseSignature(enc){
+  var s; try { s = JSON.parse(decodeURIComponent(enc)); } catch(e){ return; }
+  document.getElementById('sign-name').value = s.jmeno || '';
+  document.getElementById('sign-funkce').value = s.funkce || '';
+  var firmaInp = document.getElementById('sign-firma'); if(firmaInp) firmaInp.value = s.firma || '';
+  _loadSignatureToCanvas(s.dataUrl);
+  closeReuseSignPicker();
+  showToast('📋 Podpis převzat – zvol datum a TePř, pak Ulož', 2800);
+}
+function _loadSignatureToCanvas(dataUrl){
+  var canvas = document.getElementById('sign-canvas'); if(!canvas || !dataUrl) return;
+  _initSignCanvas();                     // zajistí ctx + rozměry podle DPR
+  var ctx = window._signCtx; if(!ctx) return;
+  var rect = canvas.getBoundingClientRect();
+  var img = new Image();
+  img.onload = function(){
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, rect.width, rect.height);
+    var scale = Math.min(rect.width / img.width, rect.height / img.height, 1);
+    var w = img.width * scale, h = img.height * scale;
+    ctx.drawImage(img, (rect.width - w) / 2, (rect.height - h) / 2, w, h);
+  };
+  img.src = dataUrl;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -12097,6 +12505,7 @@ function copyDiaryExport(){
   <div id="photo-fs-menu" style="display:none;position:absolute;bottom:60px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:8px;min-width:200px;box-shadow:0 8px 30px rgba(0,0,0,0.6);z-index:5;" onclick="event.stopPropagation()">
     <button onclick="openCurrentFsPhotoExternal()" style="display:block;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">📷 Otevřít v novém okně</button>
     <button id="photo-fs-menu-soedit" onclick="togglePhotoFsMenu();editPhotoSO()" style="display:none;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">🏗️ Přeřadit SO</button>
+    <button id="photo-fs-menu-kmedit" onclick="togglePhotoFsMenu();editPhotoKm()" style="display:none;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">📍 Přeřadit/smazat km</button>
     <button id="photo-fs-menu-sharesub" onclick="togglePhotoShare('sub')" style="display:none;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">👷 Sdílet subce</button>
     <button id="photo-fs-menu-shareinv" onclick="togglePhotoShare('investor')" style="display:none;width:100%;text-align:left;background:none;border:none;color:var(--text);padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">🏛️ Sdílet investorovi</button>
     <button id="photo-fs-menu-delete" onclick="togglePhotoFsMenu();deleteStandalonePhoto()" style="display:none;width:100%;text-align:left;background:none;border:none;color:#e94560;padding:11px 12px;font-size:14px;cursor:pointer;border-radius:8px;">🗑️ Smazat fotku</button>
@@ -12147,9 +12556,9 @@ function copyDiaryExport(){
       <div style="flex:0 0 auto;">
         <div style="font-size:10px;color:var(--text2);text-transform:uppercase;margin-bottom:2px;">🔳 Velikost náhledů</div>
         <div style="display:inline-flex;align-items:center;gap:2px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:2px;">
-          <button onclick="stepGalleryCols(-1)" title="Větší náhledy" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">−</button>
+          <button onclick="stepGalleryCols(1)" title="Menší náhledy (víc ve řadě)" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">−</button>
           <span id="gallery-cols-val" style="font-size:12px;color:var(--text2);min-width:46px;text-align:center;">3 / řada</span>
-          <button onclick="stepGalleryCols(1)" title="Menší náhledy (víc ve řadě)" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">+</button>
+          <button onclick="stepGalleryCols(-1)" title="Větší náhledy" style="background:none;border:none;color:var(--text);font-size:18px;font-weight:800;cursor:pointer;width:30px;height:30px;">+</button>
         </div>
       </div>
     </div>
@@ -12880,8 +13289,9 @@ function copyDiaryExport(){
       <div class="sht-bulk">
         <input type="number" id="sht-bulk-input" placeholder="8" min="0" max="24" step="0.5">
         <button onclick="sichtovkaFillAll()">Vyplnit všem</button>
+        <button onclick="sichtovkaFillSelected()" title="Vyplní jen zaškrtnuté řádky (0 = smazat)">✓ Vybraným</button>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);cursor:pointer;"><input type="checkbox" onchange="_toggleAllPicks('sht',this.checked)" style="width:15px;height:15px;">vše</label>
         <button onclick="openFirmyModal()" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);">👷 Lidé / firmy</button>
-        <span class="lbl" style="flex:0;">např. všem 8 h</span>
       </div>
       <div id="sht-list" style="margin-top:8px;"></div>
       <div class="sht-total" id="sht-total">Celkem <b>0 h</b></div>
@@ -12894,8 +13304,14 @@ function copyDiaryExport(){
       <div class="sht-bulk">
         <input type="number" id="str-bulk-input" placeholder="8" min="0" max="24" step="0.5">
         <button onclick="strojeFillAll()">Vyplnit všem</button>
+        <button onclick="strojeFillSelected()" title="Vyplní jen zaškrtnuté řádky (0 = smazat)">✓ Vybraným</button>
+        <label style="display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text2);cursor:pointer;"><input type="checkbox" onchange="_toggleAllPicks('str',this.checked)" style="width:15px;height:15px;">vše</label>
+        <select id="str-sort" onchange="setStrojSort(this.value)" title="Řazení strojů" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;padding:4px;">
+          <option value="firma">🏢 firma</option>
+          <option value="so">🏗️ SO</option>
+          <option value="nazev">🔤 A–Z</option>
+        </select>
         <button onclick="openStrojeModal()" style="background:var(--panel2);color:var(--text);border:1px solid var(--border);">🚜 Spravovat stroje</button>
-        <span class="lbl" style="flex:0;">např. všem 8 h</span>
       </div>
       <div id="str-list" style="margin-top:8px;"></div>
       <div class="sht-total" id="str-total">Celkem <b>0 h</b></div>
@@ -12928,6 +13344,11 @@ function copyDiaryExport(){
         <input class="diary-field" id="mat-so" list="mat-so-list" placeholder="SO (volitelně)" style="flex:1;min-width:90px;">
         <datalist id="mat-so-list"></datalist>
       </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center;">
+        <input class="diary-field" id="mat-pocet" type="text" inputmode="decimal" placeholder="Počet / množství" style="flex:1;min-width:80px;">
+        <select class="diary-field mj-select" id="mat-mj" style="flex:1;min-width:70px;"><option value="">MJ</option></select>
+        <button type="button" onclick="openMjManage()" title="Spravovat měrné jednotky (admin)" style="background:var(--panel2);color:var(--text2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:13px;">⚙️</button>
+      </div>
       <input class="diary-field" id="mat-poznamka" placeholder="📝 Poznámka k tomuto materiálu (volitelně)" style="width:100%;box-sizing:border-box;margin-top:6px;">
       <div id="mat-photos" style="display:flex;flex-wrap:wrap;gap:6px;min-height:4px;margin-top:6px;"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
@@ -12942,6 +13363,29 @@ function copyDiaryExport(){
         <summary style="cursor:pointer;font-size:12px;color:var(--text2);">📝 Volný text (poznámka k materiálům)</summary>
         <textarea class="diary-field" id="dn-materialy" placeholder="Např. 5 t kameniva, autodomíchávač 2× …" onchange="diarySaveDay()" style="margin-top:6px;"></textarea>
       </details>
+    </div>
+
+    <!-- #71d: Nákladní automobily (NA) -->
+    <div class="diary-section">
+      <h3>🚛 Nákladní automobily <span class="ds-cnt" id="na-count">0</span></h3>
+      <div id="na-list"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <select class="diary-field" id="na-oznaceni" style="flex:1;min-width:120px;">
+          <option value="">Typ náklaďáku…</option>
+          <option value="6 kol">6 kol (3-nápr.)</option>
+          <option value="8 kol">8 kol (4-nápr.)</option>
+          <option value="vana">Vana</option>
+          <option value="návěs">Návěs</option>
+          <option value="jiné">Jiné</option>
+        </select>
+        <input class="diary-field" id="na-firma" placeholder="Firma (volitelně)" style="flex:1;min-width:100px;">
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <input class="diary-field" id="na-pocet" type="number" min="0" step="1" placeholder="Počet aut" style="flex:1;min-width:80px;">
+        <input class="diary-field" id="na-hodiny" type="number" min="0" max="24" step="0.5" placeholder="Hodiny" style="flex:1;min-width:80px;">
+      </div>
+      <input class="diary-field" id="na-poznamka" placeholder="📝 Poznámka (co vezl / kam)…" style="width:100%;box-sizing:border-box;margin-top:6px;">
+      <button class="btn-primary" style="width:100%;margin-top:6px;" onclick="nakladAdd()">+ Přidat náklaďák</button>
     </div>
 
     <!-- Přidat další dodák k existujícímu materiálu -->
@@ -13361,7 +13805,10 @@ function copyDiaryExport(){
 
     <label style="font-size:11px;color:var(--text2);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;">
       <span id="sign-lbl-podpis-span">Podpis (kresli prstem)</span>
-      <button id="sign-btn-clear" onclick="signClearCanvas()" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:3px 8px;font-size:11px;cursor:pointer;">⌫ Vyčistit</button>
+      <span style="display:flex;gap:6px;">
+        <button id="sign-btn-reuse" onclick="openReuseSignPicker()" title="Převzít existující podpis osoby (dopodepsání)" style="background:var(--panel2);border:1px solid var(--accent2);border-radius:6px;color:var(--accent2);padding:3px 8px;font-size:11px;cursor:pointer;">📋 Převzít podpis</button>
+        <button id="sign-btn-clear" onclick="signClearCanvas()" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text2);padding:3px 8px;font-size:11px;cursor:pointer;">⌫ Vyčistit</button>
+      </span>
     </label>
     <div style="background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;touch-action:none;flex-shrink:0;height:200px;">
       <canvas id="sign-canvas" width="520" height="200" style="display:block;width:100%;height:200px;background:#fff;cursor:crosshair;"></canvas>
@@ -13382,6 +13829,33 @@ function copyDiaryExport(){
       <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:6px;"><span id="sign-lbl-existing-txt">Stávající podpisy</span> <span id="sign-count" style="color:var(--accent2);">0</span></div>
       <div id="sign-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto;"></div>
     </div>
+  </div>
+</div>
+
+<!-- #75/#77: feed „Co se děje" – novinky + aktivita -->
+<div id="activity-modal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:4950;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:14px;">
+  <div class="tm-box" style="max-width:460px;width:100%;max-height:82vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="flex:1;">📢 Co se děje</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeActivity()">✕</button>
+    </div>
+    <div style="display:flex;gap:6px;margin:6px 0 8px;">
+      <button id="act-tab-novinky" onclick="setActivityTab('novinky')" style="flex:1;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;color:var(--accent);padding:8px;font-size:13px;cursor:pointer;">🆕 Co je nového</button>
+      <button id="act-tab-aktivita" onclick="setActivityTab('aktivita')" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px;font-size:13px;cursor:pointer;">📢 Aktivita</button>
+    </div>
+    <div id="activity-list" style="overflow-y:auto;flex:1;"></div>
+  </div>
+</div>
+
+<!-- #73: výběr existujícího podpisu k převzetí (dopodepsání) -->
+<div id="reuse-sign-modal" style="display:none;position:fixed;top:0;right:0;bottom:0;left:0;z-index:4950;background:rgba(0,0,0,.85);align-items:center;justify-content:center;padding:14px;">
+  <div class="tm-box" style="max-width:460px;width:100%;max-height:80vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="flex:1;">📋 Převzít podpis</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeReuseSignPicker()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">Vyber osobu – její podpis se překreslí na plátno a předvyplní jméno/funkce/firma. Datum a TePř zvol nahoře.</div>
+    <div id="reuse-sign-list" style="display:flex;flex-direction:column;gap:6px;overflow-y:auto;"></div>
   </div>
 </div>
 
