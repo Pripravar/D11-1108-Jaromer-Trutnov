@@ -1595,7 +1595,7 @@ var DOPLNKY_SO = [
     {typ:'📍 Vytyčovací', nazev:'Vytyčovací výkres SO 226', soubor:PDF_BASE+'SO_226/D_1_02_226_16_VytycVykres.pdf'},
     {typ:'📄 TZ (DI 134)', nazev:'Technická zpráva SO 226 (DI 134)', soubor:PDF_BASE+'SO_226/D_1_02_226_01_TechZprava_DI_134.pdf'},
   ]},
-  {id:'SO 210', kat:'200', badge:'210', km:125.723, kmShift:0, perpOffset:50, nazev:'SO 210 Most přes silnici I/37 (km 125,723)', vykresy:[
+  {id:'SO 210', kat:'200', badge:'210', km:125.723, kmShift:0, perpOffset:50, lat:50.47065, lng:15.86831, nazev:'SO 210 Most přes silnici I/37 (km 125,723) – mimo staničení této mapy', vykresy:[
     {typ:'📄 Titulka', nazev:'Titulka SO 210', soubor:PDF_BASE+'uploads/SO_210/D_1_02_210_00_01_Titulka.pdf'},
     {typ:'📄 Seznam příloh', nazev:'Seznam příloh SO 210', soubor:PDF_BASE+'uploads/SO_210/D_1_02_210_00_02_Seznam_priloh.pdf'},
     {typ:'📄 Technická zpráva', nazev:'Technická zpráva SO 210', soubor:PDF_BASE+'uploads/SO_210/D_1_02_210_01_Technicka_zprava.pdf'},
@@ -5661,19 +5661,25 @@ function buildDoplnky() {
   layerGroups.doplnky = doplnkyLayer;
 
   DOPLNKY_SO.forEach(function(d) {
-    // posun po ose silnice (kmShift) - rozprostře markery podél osy
-    var effKm = d.km + (d.kmShift || 0);
-    var pos = realKmToLatLng(effKm);
-    if(!pos) return;
-    var gpxM = interp(calibSorted,'realKm','gpxM', effKm);
-    var bear = bearingAtGpxM(gpxM);
-    var perpRad = (bear - 90) * Math.PI / 180; // perpendikulárně k ose
-    var offset = d.perpOffset || 60;
-    var dx = Math.sin(perpRad) * offset;
-    var dy = -Math.cos(perpRad) * offset;
-    var DW = 60, DH = 20;
-    var ancX = Math.round(DW/2 + dx);
-    var ancY = Math.round(DH/2 + dy);
+    var DW = 60, DH = 20, pos, ancX, ancY;
+    if(d.lat != null && d.lng != null){
+      // Pevné GPS souřadnice – objekt mimo staničení téhle mapy (např. SO 210 na jiném úseku).
+      pos = [d.lat, d.lng];
+      ancX = Math.round(DW/2); ancY = Math.round(DH/2);
+    } else {
+      // posun po ose silnice (kmShift) - rozprostře markery podél osy
+      var effKm = d.km + (d.kmShift || 0);
+      pos = realKmToLatLng(effKm);
+      if(!pos) return;
+      var gpxM = interp(calibSorted,'realKm','gpxM', effKm);
+      var bear = bearingAtGpxM(gpxM);
+      var perpRad = (bear - 90) * Math.PI / 180; // perpendikulárně k ose
+      var offset = d.perpOffset || 60;
+      var dx = Math.sin(perpRad) * offset;
+      var dy = -Math.cos(perpRad) * offset;
+      ancX = Math.round(DW/2 + dx);
+      ancY = Math.round(DH/2 + dy);
+    }
 
     var html = '<div style="width:'+DW+'px;height:'+DH+'px;display:flex;align-items:center;justify-content:center;pointer-events:all;">' +
       '<div class="doplnek-pin cat-' + d.kat + '">' + d.badge + '</div></div>';
