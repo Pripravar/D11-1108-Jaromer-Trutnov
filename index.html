@@ -963,7 +963,7 @@ textarea.diary-field { resize:none; min-height:60px; }
 .sht-so-sel:focus { outline:none; border-color:var(--accent2); }
 .sht-hours::placeholder { color:var(--text2); font-weight:400; }
 .sht-suffix { font-size:11px; color:var(--text2); }
-.sht-bulk { display:flex; gap:6px; margin-top:8px; align-items:center; }
+.sht-bulk { display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap; }
 .sht-bulk input { flex:0 0 60px; background:var(--panel2); border:1px solid var(--accent2); border-radius:6px; color:var(--text); padding:5px 6px; font-size:14px; text-align:center; }
 .sht-bulk button { background:var(--accent2); color:#0f3460; border:none; border-radius:6px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer; }
 .sht-bulk .lbl { font-size:11px; color:var(--text2); flex:1; }
@@ -10158,8 +10158,10 @@ function strojSetHours(id, val){
   var v = parseFloat(val);
   if(isNaN(v) || v <= 0) delete window.diaryCurrentData.stroje[id];
   else window.diaryCurrentData.stroje[id] = v;
+  if(typeof _syncOperatorFromMachine === 'function') _syncOperatorFromMachine('stroje', id);
   diarySaveDay();
-  renderStrojeList();
+  renderStrojeList(); renderSichtovka();
+  if(typeof renderZaverDne === 'function') renderZaverDne();
 }
 function strojSetNote(id, val){
   if(!window.diaryCurrentData) return;
@@ -10432,7 +10434,7 @@ function copyPrevDiaryDay(){
   if(!src){ showToast('Není z čeho kopírovat', 1800); return; }
   if(!confirm('Zkopírovat šichtovku, stroje, auta a SO z ' + src + ' do dnešního dne? (materiály a záznamy se nekopírují, Zpět to vrátí)')) return;
   var s = window.diaryAllDays[src] || {};
-  _diaryUndo.push(_cloneDiary(window.diaryCurrentData));
+  // undo snapshot řeší diarySaveDay níž (push _diaryLastState = pre-kopie stav)
   WORK_COPY_NODES.forEach(function(k){ if(s[k]) window.diaryCurrentData[k] = _cloneDiary(s[k]); });
   diarySaveDay(); renderDiaryDay(); _updateUndoBtn();
   showToast('📋 Zkopírováno z ' + src, 1900);
@@ -10813,9 +10815,9 @@ function renderSichtovka(){
     _html += '<div class="sht-row' + (filled ? ' is-filled' : '') + '"' + (filled ? ' style="background:rgba(72,187,120,0.06);"' : '') + '>'
       + '<input type="checkbox" class="sht-pick" data-id="' + u.id + '" title="Vybrat pro hromadné vyplnění" style="width:16px;height:16px;flex:0 0 auto;margin-right:2px;">'
       + '<div class="sht-left">'
-      +   '<div class="sht-name">' + escapeHtml(u.name) + typIcon + firmaHtml + telChip + '</div>'
+      +   '<div class="sht-name">' + escapeHtml(u.name) + typIcon + firmaHtml + '</div>'
       +   '<input type="text" class="sht-note" placeholder="poznámka (např. odešel k zubaři 13:00)" value="' + escapeHtml(pVal) + '" onchange="sichtovkaSetNote(\'' + u.id + '\', this.value)">'
-      +   '<div class="sht-subrow" style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">' + _timeCellHtml('osoby', u.id) + clearBtn + _collapseBtnHtml('osoby', u.id) + '</div>'
+      +   '<div class="sht-subrow" style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">' + _timeCellHtml('osoby', u.id) + telChip + clearBtn + _collapseBtnHtml('osoby', u.id) + '</div>'
       +   opLinks
       + '</div>'
       + soSelect
@@ -10845,6 +10847,7 @@ function sichtovkaSet(uid, val){
   }
   diarySaveDay();
   renderSichtovka();
+  if(typeof renderZaverDne === 'function') renderZaverDne();
 }
 
 function sichtovkaSetNote(uid, val){
