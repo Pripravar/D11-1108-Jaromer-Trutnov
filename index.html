@@ -1137,6 +1137,7 @@ document.addEventListener('touchend', function(e){
   <div id="km-display">km –</div>
   <!-- ❓ musí být PRVNÍ tlačítko: #header roluje vodorovně, na konci by bylo mimo obrazovku -->
   <button id="btn-help" onclick="openHelp()" title="Nápověda / návod k aplikaci" style="background:var(--panel2);border:1px solid var(--accent2);border-radius:8px;color:var(--accent2);padding:6px 10px;font-size:15px;cursor:pointer;font-weight:700;">❓</button>
+  <button id="btn-so-search" onclick="openSoSearch()" title="Najít SO / staničení na mapě" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">🔍</button>
   <button id="btn-tasks" onclick="openTasksPanel()" title="Úkoly" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">✅<span class="task-badge" id="task-badge">0</span></button>
   <button id="btn-activity" onclick="openActivity()" title="Co se děje – novinky v appce a aktivita týmu" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;position:relative;">📢<span id="activity-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:#e94560;color:#fff;font-size:9px;font-weight:700;min-width:15px;height:15px;line-height:15px;border-radius:8px;padding:0 3px;text-align:center;box-sizing:border-box;">0</span></button>
   <button id="btn-denik" onclick="openDiaryPanel()" title="Deník stavby" style="background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:15px;cursor:pointer;">📓</button>
@@ -4447,6 +4448,108 @@ window.addEventListener('load', function(){
   body.addEventListener('click', function(e){ if(window._gJustDragged && (Date.now() - window._gJustDragged < 80)){ e.stopPropagation(); e.preventDefault(); } }, true);
 });
 
+// ══════════ Import fotek z galerie telefonu do galerie appky (standalone_photos) ══════════
+var libImportItems = [];   // [{dataUrl, lat, lng, km, so, dateTs, name}]
+function openLibraryImport(){
+  if(typeof featGuard === 'function' && !featGuard('galerie')) return;
+  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
+  document.getElementById('lib-import-input').click();
+}
+function _exifGps(dataUrl){
+  try {
+    if(typeof piexif === 'undefined') return null;
+    var ex = piexif.load(dataUrl); var g = ex.GPS; if(!g) return null;
+    var la = g[piexif.GPSIFD.GPSLatitude], lo = g[piexif.GPSIFD.GPSLongitude];
+    if(!la || !lo) return null;
+    function dms(a){ return a[0][0]/a[0][1] + (a[1][0]/a[1][1])/60 + (a[2][0]/a[2][1])/3600; }
+    var lat = dms(la), lng = dms(lo);
+    if(g[piexif.GPSIFD.GPSLatitudeRef] === 'S') lat = -lat;
+    if(g[piexif.GPSIFD.GPSLongitudeRef] === 'W') lng = -lng;
+    if(!isFinite(lat) || !isFinite(lng)) return null;
+    return { lat: lat, lng: lng };
+  } catch(e){ return null; }
+}
+function _exifDateTs(dataUrl){
+  try {
+    if(typeof piexif === 'undefined') return null;
+    var ex = piexif.load(dataUrl);
+    var s = (ex.Exif && ex.Exif[piexif.ExifIFD.DateTimeOriginal]) || (ex['0th'] && ex['0th'][piexif.ImageIFD.DateTime]);
+    if(!s) return null;
+    var m = String(s).match(/(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+    return m ? new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]).getTime() : null;
+  } catch(e){ return null; }
+}
+function _libKmForItem(it){
+  if(it.lat == null || it.lng == null) return null;
+  try { return fmtKm(gpxCumToRealKm(nearestOnRoute(it.lat, it.lng).cum)); } catch(e){ return null; }
+}
+window.addEventListener('load', function(){
+  var inp = document.getElementById('lib-import-input'); if(!inp) return;
+  inp.addEventListener('change', function(e){
+    var files = Array.prototype.slice.call(e.target.files || []); e.target.value = '';
+    if(!files.length) return;
+    libImportItems = [];
+    showSync('⏳ Načítám ' + files.length + ' fotek…');
+    var done = 0;
+    files.forEach(function(file, idx){
+      var reader = new FileReader();
+      reader.onload = function(ev){
+        var raw = ev.target.result;
+        var gps = _exifGps(raw);                         // GPS ber z ORIGINÁLU (komprese EXIF zahodí)
+        var dTs = _exifDateTs(raw) || file.lastModified || Date.now();
+        compressImage(raw, function(compressed){
+          var it = { dataUrl: compressed, lat: gps ? gps.lat : null, lng: gps ? gps.lng : null, dateTs: dTs, so: '' };
+          it.km = _libKmForItem(it);
+          libImportItems[idx] = it;
+          if(++done === files.length){ hideSync(); libImportItems = libImportItems.filter(Boolean); renderLibImportList(); document.getElementById('lib-import-modal').style.display = 'flex'; }
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+});
+function renderLibImportList(){
+  var box = document.getElementById('lib-import-list'); if(!box) return;
+  var cEl = document.getElementById('lib-import-count'); if(cEl) cEl.textContent = libImportItems.length;
+  var noGps = libImportItems.filter(function(it){ return it.lat == null; }).length;
+  var warn = document.getElementById('lib-import-warn'); if(warn) warn.textContent = noGps ? ('⚠️ ' + noGps + ' fotek bez GPS – bez staničení (přiřaď SO ručně).') : '';
+  box.innerHTML = libImportItems.map(function(it, i){
+    var kmTxt = it.km ? ('📍 ' + it.km) : '<span style="color:#e6a23c;">bez GPS</span>';
+    var dt = it.dateTs ? new Date(it.dateTs).toLocaleDateString('cs-CZ') : '';
+    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);">'
+      + '<img src="' + it.dataUrl + '" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto;">'
+      + '<div style="flex:1;min-width:0;font-size:11px;color:var(--text2);">' + kmTxt + (dt ? (' · ' + dt) : '')
+      +   '<input type="text" id="lib-item-so-' + i + '" readonly onclick="openSOFieldPicker(\'lib-item-so-' + i + '\')" onchange="libItemSoChanged(' + i + ')" value="' + escapeHtml(it.so || '') + '" placeholder="SO (klepni pro výběr)" style="width:100%;box-sizing:border-box;margin-top:3px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-size:12px;cursor:pointer;"></div>'
+      + '</div>';
+  }).join('');
+}
+function libItemSoChanged(i){ var el = document.getElementById('lib-item-so-' + i); if(el && libImportItems[i]) libImportItems[i].so = (el.value || '').trim(); }
+function libApplyBulk(){
+  var v = (document.getElementById('lib-bulk-so').value || '').trim();
+  libImportItems.forEach(function(it){ it.so = v; });
+  renderLibImportList();
+  showToast(v ? ('SO „' + v + '" u všech') : 'SO zrušeno u všech', 1500);
+}
+function closeLibImport(){ document.getElementById('lib-import-modal').style.display = 'none'; libImportItems = []; }
+function submitLibImport(){
+  if(!libImportItems.length){ closeLibImport(); return; }
+  libImportItems.forEach(function(it, i){ libItemSoChanged(i); });
+  var author = (window.currentUser && window.currentUser.name) || localStorage.getItem('noteAuthor') || '';
+  var items = libImportItems.slice(), n = items.length;
+  closeLibImport();
+  items.forEach(function(it){
+    var soArr = it.so ? [it.so] : [];
+    _enqueuePhotoUpload({
+      compressed: it.dataUrl,
+      meta: { km: it.km, author: author, lat: it.lat, lng: it.lng, so: soArr[0] || '', soList: soArr, dateTs: it.dateTs, imported: true },
+      stamp: true,
+      ts: _uniquePhotoTs()
+    });
+  });
+  showToast('📥 Importuji ' + n + ' fotek na pozadí…', 2800);
+  if(typeof logActivity === 'function') logActivity('📥', 'naimportoval/a ' + n + ' fotek z galerie');
+}
+
 // Stáhne sekvenčně každou fotku zvlášť (poslední záchrana - neideální UX)
 function _sequentialDownloadFiles(files) {
   if(!files.length) return;
@@ -5834,6 +5937,78 @@ function buildPropustky() {
   });
 }
 
+// ══════════ 🔍 Hledáček SO / staničení → přiblížení na mapě + výkresy ══════════
+function _soSearchNorm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function _soSearchIcon(o){
+  var n = (o.name || '').toLowerCase();
+  if(o.kat === 'osa') return '↔️';
+  if(n.indexOf('most') >= 0) return '🌉';
+  if(n.indexOf('nadjezd') >= 0 || n.indexOf('podjezd') >= 0) return '🛤️';
+  if(n.indexOf('propust') >= 0) return '🔵';
+  if(n.indexOf('vo') === 0 || n.indexOf('osvětlen') >= 0) return '💡';
+  if(n.indexOf('plyn') >= 0) return '🔥';
+  return '🏗️';
+}
+function _buildSoSearchIndex(){
+  if(window._soSearchIndex) return window._soSearchIndex;
+  var idx = [];
+  function add(id, name, kat, pos, dop){ if(!id) return; idx.push({ id:id, name:name || '', kat:kat || '', pos:pos, dop:dop || null, _h:_soSearchNorm(id + ' ' + (name || '') + ' ' + (kat || '')) }); }
+  // 1) bodové objekty (mosty, nadjezdy, přeložky, IS…) – poloha z lat/lng nebo km
+  try { (typeof DOPLNKY_SO !== 'undefined' ? DOPLNKY_SO : []).forEach(function(d){
+    var pos = (d.lat != null && d.lng != null) ? [d.lat, d.lng] : realKmToLatLng((d.km || 0) + (d.kmShift || 0));
+    add(d.id, d.nazev, d.kat, pos, d);
+  }); } catch(e){}
+  // 2) pruhy po ose (hlavní trasa) – poloha = střed km rozsahu
+  try { (typeof STAVEBNI_OBJEKTY !== 'undefined' ? STAVEBNI_OBJEKTY : []).forEach(function(s){
+    var pos = realKmToLatLng(((s.kmOd || 0) + (s.kmDo || 0)) / 2);
+    add(s.id, s.short || s.label, 'osa', pos, null);
+  }); } catch(e){}
+  // 3) vlastní objekty (deponie, ZS) – bez polohy, jen jako záznam (klik nic neudělá, ale najde se)
+  try { (typeof customSO !== 'undefined' ? customSO : []).forEach(function(o){ add(o.id, o.short, 'custom', null, null); }); } catch(e){}
+  window._soSearchIndex = idx;
+  return idx;
+}
+function openSoSearch(){
+  var m = document.getElementById('so-search-modal'); if(!m) return;
+  _buildSoSearchIndex();
+  m.style.display = 'flex';
+  var inp = document.getElementById('so-search-input'); if(inp){ inp.value = ''; setTimeout(function(){ inp.focus(); }, 90); }
+  _renderSoSearch();
+}
+function closeSoSearch(){ var m = document.getElementById('so-search-modal'); if(m) m.style.display = 'none'; }
+function _renderSoSearch(){
+  var box = document.getElementById('so-search-list'); if(!box) return;
+  var q = (document.getElementById('so-search-input').value || '').trim();
+  var idx = _buildSoSearchIndex();
+  var html = '';
+  if(/^\d+[+.,]\d{1,3}$/.test(q)){
+    var km = parseKmStr(q);
+    if(km != null) html += '<button onclick="_soSearchGoKm(' + km + ')" style="display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--accent);border-radius:8px;color:var(--text);padding:9px 11px;font-size:14px;cursor:pointer;margin-bottom:6px;">📍 Staničení km ' + escapeHtml(q) + ' → skok na osu</button>';
+  }
+  var res;
+  if(!q){ res = idx.slice(); }
+  else { var toks = _soSearchNorm(q).split(/\s+/).filter(Boolean); res = idx.filter(function(o){ return toks.every(function(t){ return o._h.indexOf(t) >= 0; }); }); }
+  var seen = {}; res = res.filter(function(o){ if(seen[o.id]) return false; seen[o.id] = 1; return true; });
+  html += res.slice(0, 80).map(function(o){
+    var i = idx.indexOf(o);
+    return '<button onclick="_soSearchGo(' + i + ')" style="display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 11px;font-size:14px;cursor:pointer;margin-bottom:5px;">' + _soSearchIcon(o) + ' <b>' + escapeHtml(o.id) + '</b> <span style="color:var(--text2);font-size:12px;">' + escapeHtml(o.name) + '</span></button>';
+  }).join('');
+  if(!res.length && !/^\d/.test(q)) html += '<div style="color:var(--text2);font-size:13px;padding:12px;text-align:center;">Nic nenalezeno. Zkus číslo SO (např. 210) nebo staničení (2+350).</div>';
+  box.innerHTML = html;
+}
+function _soFlyTo(pos){
+  if(!pos || !window.map) return;
+  try { map.flyTo(L.latLng(pos[0], pos[1]), 17, { duration: 0.8 }); if(typeof showSelectionRing === 'function') showSelectionRing(L.latLng(pos[0], pos[1])); } catch(e){}
+}
+function _soSearchGo(i){
+  var o = (window._soSearchIndex || [])[i]; if(!o) return;
+  closeSoSearch();
+  if(o.pos) _soFlyTo(o.pos);
+  else showToast('Objekt „' + o.id + '" nemá polohu na mapě', 2200);
+  if(o.dop){ setTimeout(function(){ try { openPropPanel(o.dop); } catch(e){} }, 760); }   // otevři jeho výkresy jako klik na značku
+}
+function _soSearchGoKm(km){ closeSoSearch(); var pos = realKmToLatLng(km); if(pos) _soFlyTo(pos); else showToast('Staničení mimo trasu', 2000); }
+
 function openPropPanel(prop) {
   if(typeof hasPerm==='function' && !hasPerm('pdf')){ showToast('🔒 Výkresy Ti nejsou povolené', 2500); return; }
   var pPos = realKmToLatLng(prop.km); if(pPos) showSelectionRing(L.latLng(pPos[0],pPos[1]));
@@ -6714,7 +6889,15 @@ function _updateUploadBadge(){
 // Uploady jdou SEKVENČNĚ (GitHub neumí paralelní PUT do stejné větve – jinak 409).
 function _processPhotoJob(job, done){
   var compressed = job.compressed, meta = job.meta, yes = job.stamp, t = job.ts;
-  burnInMetadata(compressed, meta.km, meta.author, meta, function(stampedDataUrl){
+  // Import z galerie: razítkuj s PŮVODNÍM datem fotky (ne dneškem)
+  function _stamp(cb){
+    if(meta.dateTs && typeof burnInMetadataWithDate === 'function'){
+      burnInMetadataWithDate(compressed, meta.km, meta.author, new Date(meta.dateTs), meta, { so:true, km:true, datum:true, cas:true, jmeno:true }, cb);
+    } else {
+      burnInMetadata(compressed, meta.km, meta.author, meta, cb);
+    }
+  }
+  _stamp(function(stampedDataUrl){
     var fnOrig  = 'standalone/foto_' + t + '_o.jpg';
     var fnStamp = 'standalone/foto_' + t + '_s.jpg';
     var fnThumb = 'standalone/foto_' + t + '_t.jpg';
@@ -6736,9 +6919,11 @@ function _processPhotoJob(job, done){
                 km: meta.km, author: meta.author,
                 uid: (window.currentUser ? window.currentUser.uid : null),
                 lat: meta.lat, lng: meta.lng,
-                time: new Date().toLocaleString('cs-CZ'),
-                date: new Date().toLocaleDateString('cs-CZ'), ts: t
+                time: (meta.dateTs ? new Date(meta.dateTs) : new Date()).toLocaleString('cs-CZ'),
+                date: (meta.dateTs ? new Date(meta.dateTs) : new Date()).toLocaleDateString('cs-CZ'),
+                ts: (meta.dateTs || t)   // import z galerie: zachovej původní datum (řazení/grupování), klíč zůstává unikátní 't'
               };
+              if(meta.imported) entry.imported = true;
               if(urlOrig)  entry.urlOriginal = urlOrig;
               if(urlStamp) entry.urlStamped  = urlStamp;
               if(thumbUrl) entry.thumb = thumbUrl;
@@ -13319,6 +13504,7 @@ function copyDiaryExport(){
     <button id="gallery-group-btn" onclick="toggleGalleryGrouped()" title="Zobrazit po stavebních objektech" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">📁 Po objektech</button>
     <button id="gallery-select-btn" onclick="toggleGallerySelectMode()" title="Hromadný výběr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">☑️ Vybrat</button>
     <button onclick="toggleGalleryFilter()" title="Filtr" style="background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">🔍 Filtr</button>
+    <button onclick="openLibraryImport()" title="Import fotek z galerie telefonu" style="background:var(--panel2);border:1px solid var(--accent2);border-radius:6px;color:var(--accent2);padding:6px 10px;font-size:13px;cursor:pointer;margin-right:6px;">📥 Import</button>
     <button id="gallery-close" onclick="closeGallery()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;padding:4px 8px;">&#x2715;</button>
   </div>
   <div id="gallery-tabs">
@@ -13426,6 +13612,28 @@ function copyDiaryExport(){
     <div class="tm-buttons" style="margin-top:10px;">
       <button class="btn-primary" onclick="applyPhotoDate()">Nastavit datum</button>
       <button class="btn-secondary" onclick="closePhotoDateModal()">Zrušit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import fotek z galerie telefonu -->
+<input type="file" id="lib-import-input" accept="image/*" multiple style="display:none">
+<div id="lib-import-modal" style="display:none;position:fixed;inset:0;z-index:5200;background:rgba(0,0,0,.82);align-items:center;justify-content:center;padding:16px;">
+  <div class="tm-box" style="max-width:460px;width:100%;max-height:86vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="flex:1;">📥 Import fotek z galerie (<span id="lib-import-count">0</span>)</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeLibImport()">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Staničení se dopočte z GPS fotky (kde je). Přiřaď SO – hromadně nebo u každé zvlášť.</div>
+    <div id="lib-import-warn" style="font-size:11px;color:#e6a23c;margin-bottom:6px;"></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <input type="text" id="lib-bulk-so" readonly onclick="openSOFieldPicker('lib-bulk-so')" placeholder="SO pro všechny (klepni)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;font-size:13px;cursor:pointer;">
+      <button class="btn-secondary" onclick="libApplyBulk()">Použít na vše</button>
+    </div>
+    <div id="lib-import-list" style="overflow-y:auto;flex:1;border-top:1px solid var(--border);"></div>
+    <div class="tm-buttons" style="margin-top:10px;">
+      <button class="btn-primary" onclick="submitLibImport()">📥 Importovat</button>
+      <button class="btn-secondary" onclick="closeLibImport()">Zrušit</button>
     </div>
   </div>
 </div>
@@ -14043,6 +14251,18 @@ function copyDiaryExport(){
 </div>
 
 <!-- #58: multi-výběr SO pro osobu/stroj v šichtovce -->
+<!-- 🔍 Hledáček SO / staničení -->
+<div id="so-search-modal" style="display:none;position:fixed;inset:0;z-index:9993;background:rgba(0,0,0,.8);align-items:flex-start;justify-content:center;padding:16px;">
+  <div class="tm-box" style="max-width:460px;width:100%;max-height:82vh;display:flex;flex-direction:column;margin-top:6vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="flex:1;">🔍 Najít SO / staničení</h3>
+      <button class="btn-secondary" style="padding:4px 10px;" onclick="closeSoSearch()">✕</button>
+    </div>
+    <input type="text" id="so-search-input" oninput="_renderSoSearch()" placeholder="Číslo SO (210), název (most, přeložka), nebo km (2+350)" style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px;font-size:15px;margin:6px 0 8px;">
+    <div id="so-search-list" style="overflow-y:auto;flex:1;"></div>
+  </div>
+</div>
+
 <!-- #10: reset dne -->
 <div id="reset-day-modal" style="display:none;position:fixed;inset:0;z-index:9992;background:rgba(0,0,0,.72);align-items:center;justify-content:center;padding:18px;">
   <div class="tm-box" style="max-width:400px;width:100%;">
