@@ -10143,7 +10143,7 @@ function openSichtSoPicker(id, kind){
   String(cur).split(',').forEach(function(s){ s = s.trim(); if(s) sel[s] = 1; });
   _sichtSoState = { id: id, kind: kind, sel: sel };
   _renderSichtSoList();
-  var m = document.getElementById('sicht-so-modal'); if(m) m.classList.add('open');
+  var m = document.getElementById('sicht-so-modal'); if(m){ m.classList.add('open'); m.style.display = 'flex'; }
 }
 function _renderSichtSoList(){
   var st = _sichtSoState; if(!st) return;
@@ -10183,7 +10183,7 @@ function saveSichtSo(){
   }
   changeSOForDay(st.id, st.kind, Object.keys(st.sel).join(', '));   // '' = explicitní Bez SO
 }
-function closeSichtSo(){ var m = document.getElementById('sicht-so-modal'); if(m) m.classList.remove('open'); }
+function closeSichtSo(){ var m = document.getElementById('sicht-so-modal'); if(m){ m.classList.remove('open'); m.style.display = 'none'; } }
 // #11: obecný SO výběr do libovolného textového pole (poznámka/úkol/materiál) – stejný multi-select jako šichtovka
 var _soFieldTarget = null;
 function openSOFieldPicker(inputId){
@@ -10193,7 +10193,7 @@ function openSOFieldPicker(inputId){
   String(inp.value || '').split(',').forEach(function(s){ s = s.trim(); if(s) sel[s] = 1; });
   _sichtSoState = { id: '__FIELD__', kind: 'field', sel: sel };
   _renderSichtSoList();
-  var m = document.getElementById('sicht-so-modal'); if(m){ m.style.zIndex = 9999; m.classList.add('open'); }
+  var m = document.getElementById('sicht-so-modal'); if(m){ m.style.zIndex = 9999; m.classList.add('open'); m.style.display = 'flex'; }
 }
 
 function handleSOSelectChange(sel){
