@@ -4512,23 +4512,51 @@ function renderLibImportList(){
   var box = document.getElementById('lib-import-list'); if(!box) return;
   var cEl = document.getElementById('lib-import-count'); if(cEl) cEl.textContent = libImportItems.length;
   var noGps = libImportItems.filter(function(it){ return it.lat == null; }).length;
-  var warn = document.getElementById('lib-import-warn'); if(warn) warn.textContent = noGps ? ('⚠️ ' + noGps + ' fotek bez GPS – bez staničení (přiřaď SO ručně).') : '';
+  var warn = document.getElementById('lib-import-warn'); if(warn) warn.textContent = noGps ? ('⚠️ ' + noGps + ' fotek bez GPS – doplň km/SO ručně.') : '';
   box.innerHTML = libImportItems.map(function(it, i){
-    var kmTxt = it.km ? ('📍 ' + it.km) : '<span style="color:#e6a23c;">bez GPS</span>';
-    var dt = it.dateTs ? new Date(it.dateTs).toLocaleDateString('cs-CZ') : '';
-    return '<div style="display:flex;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);">'
+    var dval = it.dateTs ? ymd(new Date(it.dateTs)) : '';
+    return '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 4px;border-bottom:1px solid var(--border);">'
       + '<img src="' + it.dataUrl + '" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex:0 0 auto;">'
-      + '<div style="flex:1;min-width:0;font-size:11px;color:var(--text2);">' + kmTxt + (dt ? (' · ' + dt) : '')
-      +   '<input type="text" id="lib-item-so-' + i + '" readonly onclick="openSOFieldPicker(\'lib-item-so-' + i + '\')" onchange="libItemSoChanged(' + i + ')" value="' + escapeHtml(it.so || '') + '" placeholder="SO (klepni pro výběr)" style="width:100%;box-sizing:border-box;margin-top:3px;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-size:12px;cursor:pointer;"></div>'
+      + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;">'
+      +   '<input type="text" id="lib-item-so-' + i + '" readonly onclick="openSOFieldPicker(\'lib-item-so-' + i + '\')" onchange="libItemSoChanged(' + i + ')" value="' + escapeHtml(it.so || '') + '" placeholder="🏗️ SO (klepni pro výběr)" style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 7px;font-size:12px;cursor:pointer;">'
+      +   '<div style="display:flex;gap:5px;">'
+      +     '<input type="text" id="lib-item-km-' + i + '" onchange="libItemKmChanged(' + i + ')" value="' + escapeHtml(it.km || '') + '" placeholder="📍 km (128,350)" style="flex:1;min-width:0;box-sizing:border-box;background:var(--panel2);border:1px solid ' + (it.lat != null ? 'var(--border)' : '#e6a23c') + ';border-radius:6px;color:var(--text);padding:5px 7px;font-size:12px;">'
+      +     '<input type="date" id="lib-item-date-' + i + '" onchange="libItemDateChanged(' + i + ')" value="' + dval + '" style="flex:1;min-width:0;box-sizing:border-box;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 6px;font-size:12px;">'
+      +   '</div>'
+      + '</div>'
       + '</div>';
   }).join('');
 }
 function libItemSoChanged(i){ var el = document.getElementById('lib-item-so-' + i); if(el && libImportItems[i]) libImportItems[i].so = (el.value || '').trim(); }
+function libItemKmChanged(i){
+  var el = document.getElementById('lib-item-km-' + i); var it = libImportItems[i]; if(!el || !it) return;
+  var v = (el.value || '').trim();
+  if(!v){ it.km = null; return; }
+  var kmNum = parseKmStr(v); if(kmNum == null){ showToast('Neplatné staničení', 1600); return; }
+  it.km = v; var ll = realKmToLatLng(kmNum); if(ll){ it.lat = ll[0]; it.lng = ll[1]; }
+}
+function libItemDateChanged(i){
+  var el = document.getElementById('lib-item-date-' + i); var it = libImportItems[i]; if(!el || !it) return;
+  var v = (el.value || '').trim(); if(!v) return;
+  var d = new Date(v + 'T00:00:00'); if(it.dateTs){ var o = new Date(it.dateTs); d.setHours(o.getHours(), o.getMinutes(), o.getSeconds()); }
+  it.dateTs = d.getTime();
+}
 function libApplyBulk(){
   var v = (document.getElementById('lib-bulk-so').value || '').trim();
   libImportItems.forEach(function(it){ it.so = v; });
   renderLibImportList();
   showToast(v ? ('SO „' + v + '" u všech') : 'SO zrušeno u všech', 1500);
+}
+function libApplyBulkKm(){
+  var v = (document.getElementById('lib-bulk-km').value || '').trim();
+  if(v){ var kmNum = parseKmStr(v); if(kmNum == null){ showToast('Neplatné staničení', 1600); return; } var ll = realKmToLatLng(kmNum); libImportItems.forEach(function(it){ it.km = v; if(ll){ it.lat = ll[0]; it.lng = ll[1]; } }); }
+  else { libImportItems.forEach(function(it){ it.km = null; }); }
+  renderLibImportList(); showToast(v ? ('km ' + v + ' u všech') : 'km zrušeno u všech', 1500);
+}
+function libApplyBulkDate(){
+  var v = (document.getElementById('lib-bulk-date').value || '').trim(); if(!v){ showToast('Vyber datum', 1500); return; }
+  libImportItems.forEach(function(it){ var d = new Date(v + 'T00:00:00'); if(it.dateTs){ var o = new Date(it.dateTs); d.setHours(o.getHours(), o.getMinutes(), o.getSeconds()); } it.dateTs = d.getTime(); });
+  renderLibImportList(); showToast('datum u všech', 1500);
 }
 function closeLibImport(){ document.getElementById('lib-import-modal').style.display = 'none'; libImportItems = []; }
 function submitLibImport(){
@@ -13626,10 +13654,22 @@ function copyDiaryExport(){
     </div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Staničení se dopočte z GPS fotky (kde je). Přiřaď SO – hromadně nebo u každé zvlášť.</div>
     <div id="lib-import-warn" style="font-size:11px;color:#e6a23c;margin-bottom:6px;"></div>
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
-      <input type="text" id="lib-bulk-so" readonly onclick="openSOFieldPicker('lib-bulk-so')" placeholder="SO pro všechny (klepni)" style="flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;font-size:13px;cursor:pointer;">
-      <button class="btn-secondary" onclick="libApplyBulk()">Použít na vše</button>
+    <div style="border:1px dashed var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Hromadně nastavit všem:</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;">
+        <input type="text" id="lib-bulk-so" readonly onclick="openSOFieldPicker('lib-bulk-so')" placeholder="🏗️ SO (klepni)" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;font-size:13px;cursor:pointer;">
+        <button class="btn-secondary" onclick="libApplyBulk()">Na vše</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:5px;">
+        <input type="text" id="lib-bulk-km" placeholder="📍 Staničení km (128,350)" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:7px 9px;font-size:13px;">
+        <button class="btn-secondary" onclick="libApplyBulkKm()">Na vše</button>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="date" id="lib-bulk-date" style="flex:1;min-width:0;background:var(--panel2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 9px;font-size:13px;">
+        <button class="btn-secondary" onclick="libApplyBulkDate()">Na vše</button>
+      </div>
     </div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:3px;">Nebo uprav u každé fotky zvlášť:</div>
     <div id="lib-import-list" style="overflow-y:auto;flex:1;border-top:1px solid var(--border);"></div>
     <div class="tm-buttons" style="margin-top:10px;">
       <button class="btn-primary" onclick="submitLibImport()">📥 Importovat</button>
