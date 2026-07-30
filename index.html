@@ -4807,21 +4807,37 @@ function _restampPhotoNow(item, key){
   if(!item || !item.urlOriginal || !key) return;
   var allFields = { so:true, km:true, datum:true, cas:true, jmeno:true };
   showSync('⏳ Přerazítkovávám fotku…');
+  var _stampedDataUrl = null;   // drž si orazítkovaný dataUrl kvůli regeneraci miniatury
   preparePhotoBlobForDownload(item, { stamp:true, fields:allFields })
     .then(function(blob){ return blobToDataUrl(blob); })
     .then(function(dataUrl){
+      _stampedDataUrl = dataUrl;
       return new Promise(function(resolve, reject){
         var fname = 'restamp_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '.jpg';
         uploadPhotoToGitHub(dataUrl, fname, function(url){ url ? resolve(url) : reject('upload'); });
       });
     })
     .then(function(newUrl){
+      // #KZ: přegeneruj i MINIATURU z čerstvě orazítkované fotky – mřížka galerie ukazuje thumb,
+      // bez toho by tam po přeřazení SO/km viselo staré razítko (vypadá to, že se „nic nestalo").
+      return new Promise(function(resolve){
+        makeThumb(_stampedDataUrl, function(thumbData){
+          if(!thumbData){ resolve({ url:newUrl, thumb:null }); return; }
+          var tfn = 'restamp_' + Date.now() + '_' + Math.random().toString(36).substr(2,4) + '_t.jpg';
+          uploadPhotoToGitHub(thumbData, tfn, function(turl){ resolve({ url:newUrl, thumb:turl||null }); });
+        });
+      });
+    })
+    .then(function(res){
+      var newUrl = res.url, newThumb = res.thumb;
       var showStamped = (item.url === item.urlStamped);   // v galerii se ukazovala orazítkovaná verze
       var upd = { urlStamped: newUrl, stamped: true, restampOnDownload: null };
       if(showStamped) upd.url = newUrl;
+      if(newThumb) upd.thumb = newThumb;
       return db.ref('standalone_photos/' + key).update(upd).then(function(){
         item.urlStamped = newUrl; item.stamped = true; item.restampOnDownload = null;
         if(showStamped){ item.url = newUrl; }
+        if(newThumb) item.thumb = newThumb;
         hideSync();
         // aktualizuj fullscreen, pokud je otevřená právě tahle fotka
         if(_photoFsKey === key){
