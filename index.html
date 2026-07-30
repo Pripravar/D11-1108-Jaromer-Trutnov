@@ -3528,8 +3528,10 @@ function _stampLines(item, km, author, dateObj, fields){
   if(on('jmeno') && author) lines.push({t:author, bold:false, dim:true});
   return lines;
 }
-// Vykreslí razítkový box (řádky) do pravého spodního rohu
-function _drawStampBox(ctx, img, lines){
+// Vykreslí razítkový box (řádky) do pravého spodního rohu.
+// opaque=true → neprůhledné krycí pozadí přes celý pravý dolní roh (přerazítkování fotky
+// bez čistého originálu: zakryje případné staré razítko pod ním, ať nevznikne dvojité).
+function _drawStampBox(ctx, img, lines, opaque){
   lines = (lines||[]).filter(function(l){ return l && l.t; });
   if(!lines.length) return;
   var fontSize = Math.max(20, Math.round(img.width / 40));
@@ -3539,9 +3541,18 @@ function _drawStampBox(ctx, img, lines){
   lines.forEach(function(l){ ctx.font=(l.bold?'bold ':'')+fontSize+'px Arial, sans-serif'; textW=Math.max(textW, ctx.measureText(l.t).width); });
   var boxW = textW + pad*2, boxH = lineH*lines.length + pad;
   var boxX = img.width - boxW - pad, boxY = img.height - boxH - pad;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
-  else ctx.fillRect(boxX, boxY, boxW, boxH);
+  if(opaque){
+    // Krycí neprůhledný obdélník v pravém dolním rohu – dost velký, aby přebil starší razítko.
+    var coverW = Math.max(boxW + pad, Math.round(img.width * 0.42));
+    var coverX = img.width - coverW - pad;
+    var coverY = boxY - pad;
+    ctx.fillStyle = '#0c0c0c';
+    ctx.fillRect(coverX, coverY, img.width - coverX, img.height - coverY);
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(boxX, boxY, boxW, boxH, 6); ctx.fill(); }
+    else ctx.fillRect(boxX, boxY, boxW, boxH);
+  }
   lines.forEach(function(l, i){
     ctx.font = (l.bold?'bold ':'')+fontSize+'px Arial, sans-serif';
     ctx.fillStyle = l.dim ? 'rgba(255,255,255,0.88)' : '#ffffff';
@@ -4132,8 +4143,10 @@ function setExifCreationDate(jpegDataUrl, date) {
 // Když není (staré fotky bez dvojí verze) → fallback na item.url + burn jen u stampChoice=true.
 function _chooseDownloadUrl(item, stampChoice, fields) {
   if(stampChoice === true) {
-    // Vždy dovypálit z ORIGINÁLU podle vybraných polí (pre-baked razítko z focení nemusí sedět s výběrem)
-    return { url: item.urlOriginal || item.url, needsBurn: true };
+    // Vždy dovypálit z ORIGINÁLU podle vybraných polí (pre-baked razítko z focení nemusí sedět s výběrem).
+    // Když originál není a fotka už razítko má (staré/importované/cizí) → vypálíme přes ni s krytím
+    // (overStamped), aby nové razítko přebilo staré místo dvojitého.
+    return { url: item.urlOriginal || item.url, needsBurn: true, overStamped: (!item.urlOriginal && !!item.stamped) };
   }
   if(stampChoice === false) {
     if(item.urlOriginal) return { url: item.urlOriginal, needsBurn: false };
@@ -4165,9 +4178,11 @@ function preparePhotoBlobForDownload(item, opts) {
         return new Blob([ab], { type:'image/jpeg' });
       }
       if(choice.needsBurn) {
-        // Vypálit razítko za běhu (datum pořízení + vybraná pole SO/km/datum/čas/jméno)
+        // Vypálit razítko za běhu (datum pořízení + vybraná pole SO/km/datum/čas/jméno).
+        // Bez originálu přes už orazítkovanou fotku → krycí neprůhledné pozadí (_opaque).
+        var burnFields = choice.overStamped ? Object.assign({}, opts.fields || {}, { _opaque: true }) : opts.fields;
         return new Promise(function(resolve){
-          burnInMetadataWithDate(dataUrl, item.km || '-', item.author || '', d, item, opts.fields, function(stampedDataUrl){
+          burnInMetadataWithDate(dataUrl, item.km || '-', item.author || '', d, item, burnFields, function(stampedDataUrl){
             resolve(continueWithExif(stampedDataUrl));
           });
         });
@@ -4193,7 +4208,7 @@ function burnInMetadataWithDate(dataUrl, km, author, dateObj, item, fields, call
       canvas.width = img.width; canvas.height = img.height;
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
-      _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', dateObj, fields));
+      _drawStampBox(ctx, img, _stampLines(item, km || '-', author || '', dateObj, fields), !!(fields && fields._opaque));
       callback(canvas.toDataURL('image/jpeg', 0.9));
     } catch(e){ console.warn('Razítko selhalo, nahrávám originál:', e); callback(dataUrl); }
   };
@@ -4756,17 +4771,11 @@ function editPhotoSO(){
       .catch(function(){ showToast('❌ Přeřazení selhalo (pravidla?)', 3000); });
   }, preset);
 }
-// Popiska pod fotkou ve fullscreenu (autor · km · SO · datum) – sdíleno openPhotoFs i editPhotoKm/SO.
+// Popiska pod fotkou ve fullscreenu – uživatel ji nechce (info je už v razítku v rohu fotky).
+// Necháváme funkci (volá se z openPhotoFs i editPhotoKm/SO), jen nic nevykresluje a element skryje.
 function _renderPhotoFsCaption(it){
-  var cap = document.getElementById('photo-fs-caption'); if(!cap || !it) return;
-  var parts = [];
-  if(it.author) parts.push('📷 ' + it.author);
-  if(it.km) parts.push('km ' + it.km);
-  var soTxt = (it.soList && it.soList.length) ? it.soList.join(', ') : (it.so || '');
-  if(soTxt) parts.push('🏗️ ' + soTxt);
-  var dt = it.time || it.date || '';
-  if(dt) parts.push(dt);
-  cap.innerHTML = parts.map(function(p){ return escapeHtml(p); }).join(' · ');
+  var cap = document.getElementById('photo-fs-caption'); if(!cap) return;
+  cap.innerHTML = ''; cap.style.display = 'none';
 }
 
 // #72: přeřadit/smazat staničení (km) fotky – samostatně od SO. Prázdné = smazat km i polohu.
@@ -4800,12 +4809,16 @@ function editPhotoKm(){
     _restampPhotoNow(item, key);   // #59: přerazítkovat z čistého originálu s novým km
   }).catch(function(){ showToast('❌ Úprava selhala (pravidla?)', 3000); });
 }
-// #59: přerazítkovat JEDNU fotku hned po přeřazení SO (z čistého originálu s novým SO).
-// POJISTKA: bez item.urlOriginal se nedělá (staré fotky bez originálu → jinak dvojité razítko;
-// zůstane restampOnDownload=true a razítko se dopočítá až při stažení).
+// #59: přerazítkovat JEDNU fotku hned po přeřazení SO/km (nový SO/km rovnou do razítka).
+// Funguje pro JAKKOLIV nahranou/vyfocenou fotku:
+//  • s čistým originálem (urlOriginal) → razítko se vypálí z originálu (nejčistší);
+//  • bez originálu (staré/importované/cizí fotky) → vypálí se přes stávající fotku s NEPRŮHLEDNÝM
+//    krycím pozadím (_opaque), které přebije případné staré razítko → žádné dvojité razítko.
 function _restampPhotoNow(item, key){
-  if(!item || !item.urlOriginal || !key) return;
+  if(!item || !key) return;
   var allFields = { so:true, km:true, datum:true, cas:true, jmeno:true };
+  // Bez čistého originálu se krycí (neprůhledné) razítko zapne automaticky uvnitř
+  // preparePhotoBlobForDownload podle item.stamped (viz _chooseDownloadUrl.overStamped).
   showSync('⏳ Přerazítkovávám fotku…');
   var _stampedDataUrl = null;   // drž si orazítkovaný dataUrl kvůli regeneraci miniatury
   preparePhotoBlobForDownload(item, { stamp:true, fields:allFields })
@@ -4830,7 +4843,9 @@ function _restampPhotoNow(item, key){
     })
     .then(function(res){
       var newUrl = res.url, newThumb = res.thumb;
-      var showStamped = (item.url === item.urlStamped);   // v galerii se ukazovala orazítkovaná verze
+      // Ukazovala se orazítkovaná verze, NEBO fotka nemá originál (pak je čerstvě orazítkovaná
+      // verze rovnou tou hlavní/viditelnou) → přepiš i url, ať fullscreen ukáže nové razítko.
+      var showStamped = (item.url === item.urlStamped) || !item.urlOriginal;
       var upd = { urlStamped: newUrl, stamped: true, restampOnDownload: null };
       if(showStamped) upd.url = newUrl;
       if(newThumb) upd.thumb = newThumb;
