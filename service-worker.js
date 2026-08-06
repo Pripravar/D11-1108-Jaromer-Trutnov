@@ -2,7 +2,7 @@
 // Strategie: network-first pro index.html (vždy čerstvá appka po pull-to-refresh),
 // cache-first jako fallback při výpadku sítě. PDF a dlaždice se NEcacheují.
 // Verzi zvyš při každém deployi, ať se stará cache invaliduje.
-var CACHE = 'd11-app-v18';
+var CACHE = 'd11-app-v19';
 var SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', function(e){

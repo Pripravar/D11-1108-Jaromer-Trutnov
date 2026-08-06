@@ -2228,7 +2228,11 @@ var GEO_SECTIONS = [
   {key:'pas_b',    title:'📕 Podrobný IGP · B – Pasporty úseků trasy (náš úsek)'},
   {key:'pas_c',    title:'📕 Podrobný IGP · C – Pasporty mostů (naše SO)'},
   {key:'pasporty', title:'📕 Podrobný IGP · Pasporty přeložek komunikací'},
-  {key:'vrty', title:'🛢️ Vrtné profily v úseku'}
+  {key:'vrty', title:'🛢️ Vrtné profily v úseku'},
+  {key:'dopl_a', title:'📗 Doplňující GTP · A – Technická průvodní zpráva'},
+  {key:'dopl_c', title:'📗 Doplňující GTP · C – Pasporty mostů'},
+  {key:'dopl_b', title:'📗 Doplňující GTP · B – Vsakovací poměry'},
+  {key:'dopl_vrty', title:'📗 Doplňující GTP · Nové vrty v úseku'}
 ];
 var GEOTECH = {
   zpravy: [
@@ -2390,6 +2394,86 @@ var GEOTECH = {
     {s:"pdf/geotechnika/vrty/J340.pdf", n:"Vrt J340"},
     {s:"pdf/geotechnika/vrty/J341.pdf", n:"Vrt J341"},
     {s:"pdf/geotechnika/vrty/J342.pdf", n:"Vrt J342"}
+  ],
+  dopl_a: [
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A00_Zprva.pdf", n:"A00 – Technická průvodní zpráva (dopl.)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A01_Pzehledn_situace.pdf", n:"A01 – Přehledná situace"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A02.1.pdf", n:"A02 – Situace (1)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A02.2.pdf", n:"A02 – Situace (2)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A02.3.pdf", n:"A02 – Situace (3)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/A02.4.pdf", n:"A02 – Situace (4)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Geofyzikln_prOzkum.pdf", n:"A05 – Geofyzikální průzkum"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/ZZ_D11_Tunel_Kamennz_Vrch-_karot_s_pzlohami.pdf", n:"A06 – Karotážní měření"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/D11_1108_Jaromoz_-_Trutnov_koro.pdf", n:"A07 – Korozní průzkum"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-174-220624.pdf", n:"A08 – Inklinometrická měření (1)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-184-220510.pdf", n:"A08 – Inklinometrická měření (2)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-184-220524.pdf", n:"A08 – Inklinometrická měření (3)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-184-220609.pdf", n:"A08 – Inklinometrická měření (4)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/TZ_AZC-21-174-220510.pdf", n:"A08 – Inklinometrická měření (5)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/TZ_AZC-21-174-220524.pdf", n:"A08 – Inklinometrická měření (6)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/TZ_AZC-21-174-220609.pdf", n:"A08 – Inklinometrická měření (7)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/TZ_AZC-21-174-220624.pdf", n:"A08 – Inklinometrická měření (8)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/Zvoreun_technick_zprva.pdf", n:"A09 – Geodetická zpráva"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/2022_07_D11_1108_tunel_Kamennz_vrch_DoHGP.pdf", n:"A10 – Hydrogeologický průzkum"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/SKM_C25822070815280.pdf", n:"A11 – Technická zpráva vrtných prací"}
+  ],
+  dopl_c: [
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10_SO_210.pdf", n:"Most SO 210 (dopl.) — pasport"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.1_Situace.pdf", n:"Most SO 210 (dopl.) — situace"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.1.pdf", n:"Most SO 210 (dopl.) — profil 1"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.2.pdf", n:"Most SO 210 (dopl.) — profil 2"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.3.pdf", n:"Most SO 210 (dopl.) — profil 3"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.4.pdf", n:"Most SO 210 (dopl.) — profil 4"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14_SO214.pdf", n:"Most SO 214 (dopl.) — pasport"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.1_Situace.pdf", n:"Most SO 214 (dopl.) — situace"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.1_Profil.pdf", n:"Most SO 214 (dopl.) — profil 1"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.2_Profil.pdf", n:"Most SO 214 (dopl.) — profil 2"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.3_Profil.pdf", n:"Most SO 214 (dopl.) — profil 3"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.4_Profil.pdf", n:"Most SO 214 (dopl.) — profil 4"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15_SO215.pdf", n:"Most SO 215 (dopl.) — pasport"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.1_Situace.pdf", n:"Most SO 215 (dopl.) — situace"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.2.1_Profil.pdf", n:"Most SO 215 (dopl.) — profil 1"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.2.2_Profil.pdf", n:"Most SO 215 (dopl.) — profil 2"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18_SO218.pdf", n:"Most SO 218 (dopl.) — pasport"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.1_Situace.pdf", n:"Most SO 218 (dopl.) — situace"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.1.pdf", n:"Most SO 218 (dopl.) — profil 1"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.2.pdf", n:"Most SO 218 (dopl.) — profil 2"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.3.pdf", n:"Most SO 218 (dopl.) — profil 3"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.4.pdf", n:"Most SO 218 (dopl.) — profil 4"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.5.pdf", n:"Most SO 218 (dopl.) — profil 5"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.6.pdf", n:"Most SO 218 (dopl.) — profil 6"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.7.pdf", n:"Most SO 218 (dopl.) — profil 7"},
+    {s:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.8.pdf", n:"Most SO 218 (dopl.) — profil 8"}
+  ],
+  dopl_b: [
+    {s:"pdf/uploads/geotechnika/doplnujici/B/Vsakovac_pomory_pod_propustky_D11_1108.pdf.pdf", n:"Úseky trasy — vsakovací poměry pod propustky"}
+  ],
+  dopl_vrty: [
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2077.pdf", n:"Vrt J2077 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2078.pdf", n:"Vrt J2078 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2079.pdf", n:"Vrt J2079 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2080.pdf", n:"Vrt J2080 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2081.pdf", n:"Vrt J2081 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2082.pdf", n:"Vrt J2082 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2083.pdf", n:"Vrt J2083 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2084.pdf", n:"Vrt J2084 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2085.pdf", n:"Vrt J2085 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2086.pdf", n:"Vrt J2086 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2087.pdf", n:"Vrt J2087 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2088.pdf", n:"Vrt J2088 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2089.pdf", n:"Vrt J2089 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2090.pdf", n:"Vrt J2090 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2091.pdf", n:"Vrt J2091 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2092.pdf", n:"Vrt J2092 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2093.pdf", n:"Vrt J2093 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2094.pdf", n:"Vrt J2094 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2095.pdf", n:"Vrt J2095 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2096.pdf", n:"Vrt J2096 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2097.pdf", n:"Vrt J2097 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2098.pdf", n:"Vrt J2098 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2099.pdf", n:"Vrt J2099 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2100.pdf", n:"Vrt J2100 (profil)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/vrty/J2101.pdf", n:"Vrt J2101 (profil)"}
   ]
 };
 function openGeotechPanel(){
@@ -5868,7 +5952,32 @@ var SONDY_BODY = [
   {c:"J339", lat:50.521923, lng:15.920135, sek:"jadro", f:"pdf/geotechnika/vrty/J339.pdf", z:497.39},
   {c:"J340", lat:50.522379, lng:15.920034, sek:"jadro", f:"pdf/geotechnika/vrty/J340.pdf", z:496.97},
   {c:"J341", lat:50.522844, lng:15.920209, sek:"jadro", f:"pdf/geotechnika/vrty/J341.pdf", z:504.36},
-  {c:"J342", lat:50.522714, lng:15.920593, sek:"jadro", f:"pdf/geotechnika/vrty/J342.pdf", z:497.84}
+  {c:"J342", lat:50.522714, lng:15.920593, sek:"jadro", f:"pdf/geotechnika/vrty/J342.pdf", z:497.84},
+  {c:"J2077", lat:50.490143, lng:15.891761, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2077.pdf", z:535.16, src:"dopl"},
+  {c:"J2078", lat:50.494713, lng:15.895613, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2078.pdf", z:514.17, src:"dopl"},
+  {c:"J2079", lat:50.498472, lng:15.898707, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2079.pdf", z:532.02, src:"dopl"},
+  {c:"J2080", lat:50.501416, lng:15.903528, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2080.pdf", z:533.30, src:"dopl"},
+  {c:"J2081", lat:50.5026, lng:15.906406, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2081.pdf", z:503.82, src:"dopl"},
+  {c:"J2082", lat:50.502781, lng:15.906875, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2082.pdf", z:504.04, src:"dopl"},
+  {c:"J2083", lat:50.50351, lng:15.908772, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2083.pdf", z:521.64, src:"dopl"},
+  {c:"J2084", lat:50.505406, lng:15.913452, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2084.pdf", z:498.11, src:"dopl"},
+  {c:"J2085", lat:50.506978, lng:15.914042, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2085.pdf", z:505.13, src:"dopl"},
+  {c:"J2086", lat:50.506736, lng:15.915387, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2086.pdf", z:502.99, src:"dopl"},
+  {c:"J2087", lat:50.51073, lng:15.917941, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2087.pdf", z:508.26, src:"dopl"},
+  {c:"J2088", lat:50.516115, lng:15.918719, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2088.pdf", z:529.56, src:"dopl"},
+  {c:"J2089", lat:50.519739, lng:15.91912, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2089.pdf", z:532.27, src:"dopl"},
+  {c:"J2090", lat:50.521513, lng:15.919845, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2090.pdf", z:505.42, src:"dopl"},
+  {c:"J2091", lat:50.521655, lng:15.919891, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2091.pdf", z:502.55, src:"dopl"},
+  {c:"J2092", lat:50.52193, lng:15.919839, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2092.pdf", z:497.52, src:"dopl"},
+  {c:"J2093", lat:50.52189, lng:15.920015, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2093.pdf", z:497.84, src:"dopl"},
+  {c:"J2094", lat:50.522007, lng:15.92011, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2094.pdf", z:495.56, src:"dopl"},
+  {c:"J2095", lat:50.521976, lng:15.920265, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2095.pdf", z:497.65, src:"dopl"},
+  {c:"J2096", lat:50.522311, lng:15.920261, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2096.pdf", z:493.77, src:"dopl"},
+  {c:"J2097", lat:50.522456, lng:15.920358, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2097.pdf", z:494.58, src:"dopl"},
+  {c:"J2098", lat:50.522398, lng:15.920524, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2098.pdf", z:491.76, src:"dopl"},
+  {c:"J2099", lat:50.522669, lng:15.920461, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2099.pdf", z:497.73, src:"dopl"},
+  {c:"J2100", lat:50.522793, lng:15.920568, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2100.pdf", z:500.20, src:"dopl"},
+  {c:"J2101", lat:50.523907, lng:15.921336, sek:"jadro", f:"pdf/uploads/geotechnika/doplnujici/vrty/J2101.pdf", z:501.77, src:"dopl"}
 ];
 var sondyLayer = null;
 function buildSondy(){
@@ -5880,7 +5989,7 @@ function buildSondy(){
     var col = SONDA_BARVA[b.sek] || '#1f78b4';
     var icon = L.divIcon({className:'', iconSize:[0,0],
       html:'<div style="position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;">'
-        +'<div style="width:9px;height:9px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.5);"></div>'
+        +'<div style="width:9px;height:9px;border-radius:50%;background:'+col+';border:2px solid '+(b.src==='dopl'?'#16a34a':'#fff')+';box-shadow:0 1px 3px rgba(0,0,0,.5);"></div>'
         +'<div style="margin-top:1px;background:rgba(255,255,255,.85);color:#222;font-size:9px;font-weight:700;line-height:1;padding:0 3px;border-radius:4px;white-space:nowrap;">'+b.c+'</div></div>'});
     var m = L.marker([b.lat,b.lng],{icon:icon, interactive:true, zIndexOffset:150});
     var km = (typeof gpsToKm==='function') ? gpsToKm(b.lat,b.lng) : null;
@@ -5890,6 +5999,7 @@ function buildSondy(){
       +'<div style="font-weight:800;font-size:15px;">\ud83d\udee2\ufe0f Vrt '+b.c+'</div>'
       +'<div style="margin-top:3px;">'+kmTxt+'v\u00fd\u0161ka <b>Z = '+b.z.toFixed(2)+' m</b> n.m.</div>'
       +(sekTxt?'<div style="color:#888;font-size:12px;">'+sekTxt+'</div>':'')
+      +(b.src==='dopl'?'<div style="color:#16a34a;font-size:11px;font-weight:700;margin-top:2px;">🆕 doplňující GTP</div>':'')
       +(b.f ? '<button onclick="openGeoDoc(this.dataset.s,this.dataset.n)" data-s="'+b.f+'" data-n="Vrt '+b.c+'" style="margin-top:8px;background:#0f3460;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;">\ud83d\udcc4 Vrtn\u00fd profil (PDF)</button>'  :  '<button onclick="openGeotechPanel()" style="margin-top:8px;background:#0f3460;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:13px;cursor:pointer;">\ud83d\udcc4 Geo profily</button>')
       +'</div>');
     m.addTo(sondyLayer);
@@ -5910,7 +6020,13 @@ var GEO_MOSTY = [
     {typ:"✂️ Profil 1", nazev:"Pasport SO 210 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.1.pdf"},
     {typ:"✂️ Profil 2", nazev:"Pasport SO 210 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.2.pdf"},
     {typ:"✂️ Profil 3", nazev:"Pasport SO 210 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.3.pdf"},
-    {typ:"✂️ Profil 4", nazev:"Pasport SO 210 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.4.pdf"}
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 210 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.4.pdf"},
+      {typ:"📄 Pasport", nazev:"Most SO 210 (dopl.) — pasport", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10_SO_210.pdf"},
+      {typ:"📐 Situace", nazev:"Most SO 210 (dopl.) — situace", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.1_Situace.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 210 (dopl.) — profil 1", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.1.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 210 (dopl.) — profil 2", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.2.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 210 (dopl.) — profil 3", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.3.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 210 (dopl.) — profil 4", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO210/C10.2.4.pdf"}
   ]},
   {id:"GEOC214", so:"214", km:130.171, perpOffset:50, nazev:"SO 214 Most přes údolí a polní cestu (km 130,171)", vykresy:[
     {typ:"📄 Pasport", nazev:"Pasport SO 214 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14_SO214.pdf"},
@@ -5918,12 +6034,22 @@ var GEO_MOSTY = [
     {typ:"✂️ Profil 1", nazev:"Pasport SO 214 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.1.pdf"},
     {typ:"✂️ Profil 2", nazev:"Pasport SO 214 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.2.pdf"},
     {typ:"✂️ Profil 3", nazev:"Pasport SO 214 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.3.pdf"},
-    {typ:"✂️ Profil 4", nazev:"Pasport SO 214 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.4.pdf"}
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 214 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.4.pdf"},
+      {typ:"📄 Pasport", nazev:"Most SO 214 (dopl.) — pasport", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14_SO214.pdf"},
+      {typ:"📐 Situace", nazev:"Most SO 214 (dopl.) — situace", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.1_Situace.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 214 (dopl.) — profil 1", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.1_Profil.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 214 (dopl.) — profil 2", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.2_Profil.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 214 (dopl.) — profil 3", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.3_Profil.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 214 (dopl.) — profil 4", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO214/C14.2.4_Profil.pdf"}
   ]},
   {id:"GEOC215", so:"215", km:130.837, perpOffset:-50, nazev:"SO 215 Most přes pravý přítok Běluňky (km 130,837)", vykresy:[
     {typ:"📄 Pasport", nazev:"Pasport SO 215 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15_SO215.pdf"},
     {typ:"📐 Situace", nazev:"Pasport SO 215 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15.1_Situace.pdf"},
-    {typ:"✂️ Profil", nazev:"Pasport SO 215 — Profil", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15.2.pdf"}
+    {typ:"✂️ Profil", nazev:"Pasport SO 215 — Profil", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15.2.pdf"},
+      {typ:"📄 Pasport", nazev:"Most SO 215 (dopl.) — pasport", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15_SO215.pdf"},
+      {typ:"📐 Situace", nazev:"Most SO 215 (dopl.) — situace", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.1_Situace.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 215 (dopl.) — profil 1", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.2.1_Profil.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 215 (dopl.) — profil 2", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO215/C15.2.2_Profil.pdf"}
   ]},
   {id:"GEOC216", so:"216", km:131.263, perpOffset:52, nazev:"SO 216 Most přes polní cestu a potok Běluňka (km 131,263)", vykresy:[
     {typ:"📄 Pasport", nazev:"Pasport SO 216 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16_SO216.pdf"},
@@ -5944,7 +6070,17 @@ var GEO_MOSTY = [
     {typ:"✂️ Profil 1", nazev:"Pasport SO 218 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.1.pdf"},
     {typ:"✂️ Profil 2", nazev:"Pasport SO 218 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.2.pdf"},
     {typ:"✂️ Profil 3", nazev:"Pasport SO 218 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.3.pdf"},
-    {typ:"✂️ Profil 4", nazev:"Pasport SO 218 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.4.pdf"}
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 218 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.4.pdf"},
+      {typ:"📄 Pasport", nazev:"Most SO 218 (dopl.) — pasport", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18_SO218.pdf"},
+      {typ:"📐 Situace", nazev:"Most SO 218 (dopl.) — situace", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.1_Situace.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 1", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.1.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 2", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.2.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 3", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.3.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 4", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.4.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 5", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.5.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 6", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.6.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 7", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.7.pdf"},
+      {typ:"✂️ Profil", nazev:"Most SO 218 (dopl.) — profil 8", soubor:"pdf/uploads/geotechnika/doplnujici/C/SO218/C18.2.8.pdf"}
   ]},
   {id:"GEOC226", so:"226", km:132.150, perpOffset:45, nazev:"SO 226 Nadjezd na přeložce III/30015 přes D11 (km 132,15)", vykresy:[
     {typ:"📄 Pasport", nazev:"Pasport SO 226 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO226/C24_SO226.pdf"},
