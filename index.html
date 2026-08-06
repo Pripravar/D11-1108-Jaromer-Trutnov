@@ -2403,7 +2403,8 @@ var GEOTECH = {
     {s:"pdf/uploads/geotechnika/doplnujici/A/A02.3.pdf", n:"A02 – Situace (3)"},
     {s:"pdf/uploads/geotechnika/doplnujici/A/A02.4.pdf", n:"A02 – Situace (4)"},
     {s:"pdf/uploads/geotechnika/doplnujici/A/Geofyzikln_prOzkum.pdf", n:"A05 – Geofyzikální průzkum"},
-    {s:"pdf/uploads/geotechnika/doplnujici/A/ZZ_D11_Tunel_Kamennz_Vrch-_karot_s_pzlohami.pdf", n:"A06 – Karotážní měření"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/ZZ_karotaz_cast_1.pdf", n:"A06 – Karotážní měření (část 1, str. 1–59)"},
+    {s:"pdf/uploads/geotechnika/doplnujici/A/ZZ_karotaz_cast_2.pdf", n:"A06 – Karotážní měření (část 2, str. 60–118)"},
     {s:"pdf/uploads/geotechnika/doplnujici/A/D11_1108_Jaromoz_-_Trutnov_koro.pdf", n:"A07 – Korozní průzkum"},
     {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-174-220624.pdf", n:"A08 – Inklinometrická měření (1)"},
     {s:"pdf/uploads/geotechnika/doplnujici/A/Protokol_AZC-21-184-220510.pdf", n:"A08 – Inklinometrická měření (2)"},
@@ -6155,7 +6156,7 @@ function buildGeoPas(){
   layerGroups.geopas = geoPasLayer;
   // ── úsekové linie (B) – barevné, vedle osy (zářez oranžová, násyp modrá) ──
   GEO_USEKY.forEach(function(u){
-    var side = 24;   // m vedle osy (dál od staničení, ať je linie čitelná)
+    var side = 45;   // m vedle osy (dál od osy i staničení, ať se to neplete)
     var col = (u.typ==='Z') ? '#9a3412' : (u.typ==='N' ? '#1d4ed8' : '#6b7280');   // zářez hnědá, násyp modrá
     var pts=[], step=0.010;
     for(var k=u.km1; k<=u.km2+1e-6; k+=step){ var p=_geoPerp(k, side); if(p) pts.push(p); }
