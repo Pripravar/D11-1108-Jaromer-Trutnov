@@ -1270,6 +1270,10 @@ document.addEventListener('touchend', function(e){
     <label>🛢️ Vrtné sondy (geotechnika)</label>
     <label class="toggle"><input type="checkbox" id="lyr-sondy" onchange="setSondyVisible(this.checked)"><span class="toggle-slider"></span></label>
   </div>
+  <div class="layer-row" data-perm="geo">
+    <label>🪨 Geotech. pasporty (úseky + mosty)</label>
+    <label class="toggle"><input type="checkbox" id="lyr-geopas" onchange="setGeoPasVisible(this.checked)"><span class="toggle-slider"></span></label>
+  </div>
   <div class="layer-row" data-perm="mereni">
     <label>📏 Měření (tým)</label>
     <label class="toggle"><input type="checkbox" id="lyr-mereni" onchange="setMereniVisible(this.checked)"><span class="toggle-slider"></span></label>
@@ -5898,6 +5902,156 @@ function setSondyVisible(on){
   if(on) sondyLayer.addTo(map);
   else if(map.hasLayer(sondyLayer)) map.removeLayer(sondyLayer);
 }
+
+var GEO_MOSTY = [
+  {id:"GEOC210", so:"210", lat:50.47065, lng:15.86831, nazev:"SO 210 Most přes I/37 (km 125,723) – mimo úsek mapy", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 210 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10_SO210.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 210 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.1_Situace.pdf"},
+    {typ:"✂️ Profil 1", nazev:"Pasport SO 210 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.1.pdf"},
+    {typ:"✂️ Profil 2", nazev:"Pasport SO 210 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.2.pdf"},
+    {typ:"✂️ Profil 3", nazev:"Pasport SO 210 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.3.pdf"},
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 210 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO210/C10.2.4.pdf"}
+  ]},
+  {id:"GEOC214", so:"214", km:130.171, perpOffset:50, nazev:"SO 214 Most přes údolí a polní cestu (km 130,171)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 214 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14_SO214.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 214 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.1_Situace.pdf"},
+    {typ:"✂️ Profil 1", nazev:"Pasport SO 214 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.1.pdf"},
+    {typ:"✂️ Profil 2", nazev:"Pasport SO 214 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.2.pdf"},
+    {typ:"✂️ Profil 3", nazev:"Pasport SO 214 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.3.pdf"},
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 214 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO214/C14.2.4.pdf"}
+  ]},
+  {id:"GEOC215", so:"215", km:130.837, perpOffset:-50, nazev:"SO 215 Most přes pravý přítok Běluňky (km 130,837)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 215 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15_SO215.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 215 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15.1_Situace.pdf"},
+    {typ:"✂️ Profil", nazev:"Pasport SO 215 — Profil", soubor:"pdf/uploads/geotechnika/podrobny/C/SO215/C15.2.pdf"}
+  ]},
+  {id:"GEOC216", so:"216", km:131.263, perpOffset:52, nazev:"SO 216 Most přes polní cestu a potok Běluňka (km 131,263)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 216 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16_SO216.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 216 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16.1_Situace.pdf"},
+    {typ:"✂️ Profil 1", nazev:"Pasport SO 216 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16.2.1.pdf"},
+    {typ:"✂️ Profil 2", nazev:"Pasport SO 216 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16.2.2.pdf"},
+    {typ:"✂️ Profil 3", nazev:"Pasport SO 216 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO216/C16.2.3.pdf"}
+  ]},
+  {id:"GEOC217", so:"217", km:131.688, perpOffset:-52, nazev:"SO 217 Most přes polní cestu u obce Střítež (km 131,688)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 217 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO217/C17_SO217.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 217 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO217/C17.1_Situace.pdf"},
+    {typ:"✂️ Profil 1", nazev:"Pasport SO 217 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO217/C17.2.1.pdf"},
+    {typ:"✂️ Profil 2", nazev:"Pasport SO 217 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO217/C17.2.2.pdf"}
+  ]},
+  {id:"GEOC218", so:"218", km:132.713, perpOffset:-55, nazev:"SO 218 Most přes les. rokli u N. Střítež (km 132,713)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 218 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18_SO218.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 218 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.1_Situace.pdf"},
+    {typ:"✂️ Profil 1", nazev:"Pasport SO 218 — Profil 1", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.1.pdf"},
+    {typ:"✂️ Profil 2", nazev:"Pasport SO 218 — Profil 2", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.2.pdf"},
+    {typ:"✂️ Profil 3", nazev:"Pasport SO 218 — Profil 3", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.3.pdf"},
+    {typ:"✂️ Profil 4", nazev:"Pasport SO 218 — Profil 4", soubor:"pdf/uploads/geotechnika/podrobny/C/SO218/C18.2.4.pdf"}
+  ]},
+  {id:"GEOC226", so:"226", km:132.150, perpOffset:45, nazev:"SO 226 Nadjezd na přeložce III/30015 přes D11 (km 132,15)", vykresy:[
+    {typ:"📄 Pasport", nazev:"Pasport SO 226 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/C/SO226/C24_SO226.pdf"},
+    {typ:"📐 Situace", nazev:"Pasport SO 226 — Situace", soubor:"pdf/uploads/geotechnika/podrobny/C/SO226/C24.1_Situace.pdf"},
+    {typ:"✂️ Profil", nazev:"Pasport SO 226 — Profil", soubor:"pdf/uploads/geotechnika/podrobny/C/SO226/C24.2.pdf"}
+  ]}
+];
+var GEO_USEKY = [
+  {id:"GEOB24", usek:"B24", typ:"Z", km1:129.310, km2:130.100, nazev:"Úsek B24 · Z24 · km 129,310–130,100", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B24 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B24/B24_Z24.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B24 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B24/B24.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B24 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B24/B24.2.pdf"}
+  ]},
+  {id:"GEOB25", usek:"B25", typ:"N", km1:130.100, km2:130.405, nazev:"Úsek B25 · N25 · km 130,100–130,405", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B25 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B25/B25_N25.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B25 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B25/B25.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B25 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B25/B25.2.pdf"}
+  ]},
+  {id:"GEOB26", usek:"B26", typ:"Z", km1:130.405, km2:130.580, nazev:"Úsek B26 · Z26 · km 130,405–130,580", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B26 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B26/B26_Z26.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B26 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B26/B26.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B26 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B26/B26.2.pdf"}
+  ]},
+  {id:"GEOB27", usek:"B27", typ:"N", km1:130.580, km2:131.065, nazev:"Úsek B27 · N27 · km 130,580–131,065", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B27 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B27/B27_N27.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B27 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B27/B27.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B27 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B27/B27.2.pdf"}
+  ]},
+  {id:"GEOB28", usek:"B28", typ:"Z", km1:131.065, km2:131.165, nazev:"Úsek B28 · Z28 · km 131,065–131,165", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B28 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B28/B28_Z28.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B28 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B28/B28.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B28 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B28/B28.2.pdf"}
+  ]},
+  {id:"GEOB29", usek:"B29", typ:"N", km1:131.165, km2:132.030, nazev:"Úsek B29 · N29 · km 131,165–132,030", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B29 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B29/B29_N29.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B29 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B29/B29.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B29 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B29/B29.2.pdf"}
+  ]},
+  {id:"GEOB30", usek:"B30", typ:"Z", km1:132.030, km2:132.660, nazev:"Úsek B30 · Z30 · km 132,030–132,660", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B30 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B30/B30_Z30.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B30 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B30/B30.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B30 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B30/B30.2.pdf"}
+  ]},
+  {id:"GEOB31", usek:"B31", typ:"N", km1:132.660, km2:133.000, nazev:"Úsek B31 · N31 · km 132,660–133,000", vykresy:[
+    {typ:"📄 Pasport", nazev:"Úsek B31 — Pasport", soubor:"pdf/uploads/geotechnika/podrobny/B/B31/B31_N31.pdf"},
+    {typ:"📎 Příloha 1", nazev:"Úsek B31 — Příloha 1", soubor:"pdf/uploads/geotechnika/podrobny/B/B31/B31.1.pdf"},
+    {typ:"📎 Příloha 2", nazev:"Úsek B31 — Příloha 2", soubor:"pdf/uploads/geotechnika/podrobny/B/B31/B31.2.pdf"}
+  ]}
+];
+
+// ══ 🪨 Geotech. pasporty (samostatná vrstva): úseky trasy (B) jako linie + mosty (C) jako body ══
+// Přílohy se otvírají stávajícím panelem výkresů (openPropPanel). Vrstva defaultně VYPNUTÁ.
+var geoPasLayer = null;
+function _geoPropById(arr,id){ for(var i=0;i<arr.length;i++) if(arr[i].id===id) return arr[i]; return null; }
+// posun o 'meters' kolmo k ose (kladné = vpravo ve směru staničení)
+function _geoPerp(km, meters){
+  var pos = realKmToLatLng(km); if(!pos) return null;
+  if(!meters) return pos;
+  try{
+    var gpxM = interp(calibSorted,'realKm','gpxM', km);
+    var a = (bearingAtGpxM(gpxM) + 90) * Math.PI/180;
+    var dLat = (Math.cos(a)*meters)/111320;
+    var dLng = (Math.sin(a)*meters)/(111320*Math.cos(pos[0]*Math.PI/180));
+    return [pos[0]+dLat, pos[1]+dLng];
+  }catch(e){ return pos; }
+}
+function openGeoMost(id){ var d=_geoPropById(GEO_MOSTY,id); if(d) openPropPanel({id:d.id, km:d.km, nazev:d.nazev, vykresy:d.vykresy}); }
+function openGeoUsek(id){ var d=_geoPropById(GEO_USEKY,id); if(d) openPropPanel({id:d.id, km:(d.km1+d.km2)/2, nazev:d.nazev, vykresy:d.vykresy}); }
+function buildGeoPas(){
+  if(geoPasLayer) return;
+  geoPasLayer = L.layerGroup();
+  layerGroups.geopas = geoPasLayer;
+  // ── úsekové linie (B) – barevné, vedle osy (zářez oranžová, násyp modrá) ──
+  GEO_USEKY.forEach(function(u){
+    var side = 24;   // m vedle osy (dál od staničení, ať je linie čitelná)
+    var col = (u.typ==='Z') ? '#9a3412' : (u.typ==='N' ? '#1d4ed8' : '#6b7280');   // zářez hnědá, násyp modrá
+    var pts=[], step=0.010;
+    for(var k=u.km1; k<=u.km2+1e-6; k+=step){ var p=_geoPerp(k, side); if(p) pts.push(p); }
+    var pe=_geoPerp(u.km2, side); if(pe) pts.push(pe);
+    if(pts.length<2) return;
+    var line=L.polyline(pts,{color:col,weight:7,opacity:0.85,lineCap:'round'});
+    (function(uu){ line.on('click',function(e){ L.DomEvent.stopPropagation(e); openGeoUsek(uu.id); }); })(u);
+    line.bindTooltip(u.usek+' · '+(u.typ==='Z'?'zářez':(u.typ==='N'?'násyp':'trasa')),{sticky:true});
+    line.addTo(geoPasLayer);
+    var mid=_geoPerp((u.km1+u.km2)/2, side);
+    if(mid){
+      var lbl=L.marker(mid,{icon:L.divIcon({className:'',iconSize:[0,0],html:'<div style="position:absolute;transform:translate(-50%,-50%);background:'+col+';color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.5);">'+u.usek+'</div>'}),interactive:false,zIndexOffset:120});
+      lbl.addTo(geoPasLayer);
+    }
+  });
+  // ── mosty (C) – fialový bod s číslem SO, mírně stranou od projektové značky ──
+  GEO_MOSTY.forEach(function(d){
+    var pos = (d.lat!=null&&d.lng!=null) ? [d.lat,d.lng] : _geoPerp(d.km, -(Math.abs(d.perpOffset||45)+8)/2);
+    if(!pos) return;
+    var icon=L.divIcon({className:'',iconSize:[0,0],html:'<div style="position:absolute;transform:translate(-50%,-50%);"><div style="background:#7c3aed;color:#fff;font-size:11px;font-weight:800;border:2px solid #fff;border-radius:7px;padding:1px 6px;box-shadow:0 1px 3px rgba(0,0,0,.5);white-space:nowrap;">🪨 '+d.so+'</div></div>'});
+    var m=L.marker(pos,{icon:icon,interactive:true,zIndexOffset:195});
+    (function(dd){ m.on('click',function(e){ L.DomEvent.stopPropagation(e); openGeoMost(dd.id); }); })(d);
+    m.addTo(geoPasLayer);
+  });
+}
+function setGeoPasVisible(on){
+  if(on && typeof _layerGuard==='function' && !_layerGuard('geo','lyr-geopas','Geotech. pasporty')) return;
+  if(!geoPasLayer) buildGeoPas();
+  var cb=document.getElementById('lyr-geopas'); if(cb) cb.checked=!!on;
+  if(on) geoPasLayer.addTo(map); else if(map.hasLayer(geoPasLayer)) map.removeLayer(geoPasLayer);
+}
+
 
 // ── Fotomapa: fotky jako shluky (clustery) v mapě ──────────────────
 var fotoMapaLayer = null;
