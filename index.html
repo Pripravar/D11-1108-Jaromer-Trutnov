@@ -117,10 +117,11 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 #btn-gps { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:all .2s; }
 /* 📷 foťák = SAMOSTATNÝ přímý FAB (vpravo nahoře nad stackem) */
 #btn-foto-fab { position:fixed; bottom:204px; right:16px; left:auto; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--accent2); color:var(--accent2); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
-/* ⋯ speed-dial: GPS/měření/blok jsou „fan children" kotvené u btn-fabmore (right:16, bottom:84) */
-#btn-gps, #btn-measure, #btn-blok { position:fixed; bottom:84px; right:16px; left:auto; width:46px; height:46px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1499; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); opacity:0; transform:scale(.4); pointer-events:none; transition:transform .22s cubic-bezier(.2,.8,.3,1.25), opacity .18s; }
+/* ⋯ speed-dial: ➕Přidat/měření/blok jsou „fan children" kotvené u btn-fabmore (right:16, bottom:84) */
+#btn-add, #btn-measure, #btn-blok { position:fixed; bottom:84px; right:16px; left:auto; width:46px; height:46px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1499; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); opacity:0; transform:scale(.4); pointer-events:none; transition:transform .22s cubic-bezier(.2,.8,.3,1.25), opacity .18s; }
+#btn-add { background:var(--accent); border-color:var(--accent); color:#fff; font-size:24px; line-height:1; }
 body.fab-open #btn-measure { opacity:1; pointer-events:auto; transform:translate(-58px,-54px); }
-body.fab-open #btn-gps     { opacity:1; pointer-events:auto; transform:translate(-72px,0); }
+body.fab-open #btn-add     { opacity:1; pointer-events:auto; transform:translate(-72px,0); }
 body.fab-open #btn-blok    { opacity:1; pointer-events:auto; transform:translate(-58px,54px); }
 /* ⋯ trigger + 🗂️ Vše + ⌂ domeček */
 #btn-fabmore, #btn-fabgrid { position:fixed; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:transform .22s; }
@@ -133,9 +134,8 @@ body.fab-open #btn-fabmore { transform:rotate(90deg); }
 body.grid-open #fabgrid-dial { display:block; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
 
-/* Tlačítko ➕ Přidat (poznámka/úkol) – nad GPS tlačítkem */
-#btn-add { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--accent); border:2px solid var(--accent); color:#fff; font-size:26px; line-height:1; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.45); transition:all .2s; }
-#btn-add:active { transform:scale(.92); }
+/* ➕ Přidat: pozici/vzhled řeší „fan child" blok výše (uvnitř ⋯ speed-dialu) */
+#btn-add:active { transform:none; }
 
 /* Měření vzdálenosti / plochy na mapě */
 /* #btn-measure, #btn-blok: pozicování řeší sdílený „fan child" blok výše (u btn-fabmore) */
@@ -1325,11 +1325,11 @@ document.addEventListener('touchend', function(e){
 
 <!-- 📷 foťák = samostatný přímý FAB (vpravo nahoře) -->
 <button id="btn-foto-fab" onclick="takeStandalonePhoto()" title="Vyfotit (samostatná fotka)">📷</button>
-<!-- ➕ Přidat = přímé, pod ⋯ dialem -->
-<button id="btn-add" onclick="openAddChooser()" title="Přidat poznámku nebo úkol">➕</button>
-<!-- ⋯ speed-dial + fan children (GPS/měření/blok) -->
+<!-- 📍 GPS = přímé, dole -->
+<button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<!-- ⋯ speed-dial + fan children (➕ Přidat / měření / blok) -->
 <button id="btn-fabmore" onclick="toggleFabMore(event)" title="Další nástroje">⋯</button>
-<button id="btn-gps" onclick="closeFabMore();toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<button id="btn-add" onclick="closeFabMore();openAddChooser()" title="Přidat poznámku nebo úkol">➕</button>
 <button id="btn-measure" onclick="closeFabMore();toggleMeasure()" title="Měřit délku / plochu na mapě">📏</button>
 <button id="btn-blok" onclick="closeFabMore();openBlokPanel()" title="Poznámkový blok (osobní zápisník)">📝</button>
 <!-- 🗂️ Vše (všechny panely) + ⌂ domeček -->
@@ -9357,7 +9357,7 @@ function closeFabGrid(){ document.body.classList.remove('grid-open'); try{ if(ma
   document.addEventListener('click', function(e){
     // fan (⋯) – klik mimo zavře
     var t = e.target;
-    if(document.body.classList.contains('fab-open') && !(t.closest && t.closest('#btn-fabmore,#btn-gps,#btn-measure,#btn-blok'))) closeFabMore();
+    if(document.body.classList.contains('fab-open') && !(t.closest && t.closest('#btn-fabmore,#btn-add,#btn-measure,#btn-blok'))) closeFabMore();
     // dial (🗂️)
     if(!document.body.classList.contains('grid-open')) return;
     var slot = t.closest && t.closest('.fg-slot');
