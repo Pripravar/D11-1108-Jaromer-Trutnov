@@ -128,8 +128,9 @@ body.fab-open #btn-blok    { opacity:1; pointer-events:auto; transform:translate
 #btn-fabgrid { bottom:144px; }
 body.fab-open #btn-fabmore { transform:rotate(90deg); }
 #btn-home-fab { position:fixed; bottom:24px; left:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
-#fabgrid-menu { position:fixed; bottom:144px; right:74px; display:none; flex-direction:column; gap:6px; max-height:64vh; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:8px; box-shadow:0 8px 30px rgba(0,0,0,.55); z-index:1502; }
-body.grid-open #fabgrid-menu { display:flex; }
+/* 🗂️ „Vše" = půlkruhový ciferník (rotary dial). Overlay chytá kroužení/ťuk mimo. */
+#fabgrid-dial { position:fixed; inset:0; z-index:1502; display:none; background:rgba(0,0,0,.18); touch-action:none; }
+body.grid-open #fabgrid-dial { display:block; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
 
 /* Tlačítko ➕ Přidat (poznámka/úkol) – nad GPS tlačítkem */
@@ -1333,7 +1334,7 @@ document.addEventListener('touchend', function(e){
 <button id="btn-blok" onclick="closeFabMore();openBlokPanel()" title="Poznámkový blok (osobní zápisník)">📝</button>
 <!-- 🗂️ Vše (všechny panely) + ⌂ domeček -->
 <button id="btn-fabgrid" onclick="toggleFabGrid(event)" title="Vše – rychlý přístup na panely">🗂️</button>
-<div id="fabgrid-menu"></div>
+<div id="fabgrid-dial"></div>
 <button id="btn-home-fab" onclick="resetMapView()" title="Reset pohledu na mapu">⌂</button>
 <div id="measure-cross"></div>
 <div id="measure-hud">
@@ -9287,31 +9288,92 @@ function deleteBlok(key){
 // ══════════ ⋯ Speed-dial (nástroje) + 🗂️ „Vše" (rychlý přístup na panely) – #89 ══════════
 function toggleFabMore(e){ if(e){ e.stopPropagation(); } document.body.classList.remove('grid-open'); document.body.classList.toggle('fab-open'); }
 function closeFabMore(){ document.body.classList.remove('fab-open'); }
-function toggleFabGrid(e){ if(e){ e.stopPropagation(); } document.body.classList.remove('fab-open'); var open = document.body.classList.toggle('grid-open'); if(open) renderFabGrid(); }
-function closeFabGrid(){ document.body.classList.remove('grid-open'); }
-// „Vše" staví položky přímo z tlačítek horní lišty → automaticky respektuje práva i budoucí tlačítka.
-function renderFabGrid(){
-  var menu = document.getElementById('fabgrid-menu'); if(!menu) return;
+// 🗂️ „Vše" = půlkruhový ciferník (dial): 5 ikon na půlkruhu vlevo od 🗂️, střed = spustit.
+// Listování: kroužení prstem/myší kolem 🗂️ (rotary), kolečko, ťuk na krajní vybledlou ikonu. #89
+var _FG_POS   = [ [4,-86], [-58,-62], [-88,0], [-58,62], [4,86] ];   // 5 slotů (dx,dy) od středu 🗂️
+var _FG_SCALE = [ 0.62, 0.82, 1.0, 0.82, 0.62 ];
+var _FG_OP    = [ 0.5, 0.85, 1.0, 0.85, 0.5 ];
+var _fgItems = [], _fgCenter = 0, _fgDrag = null, _fgSwiped = false;
+function _fgBuild(){
   var skip = { 'btn-standalone-foto':1, 'btn-reset-view':1, 'btn-layers':1 };
-  var btns = Array.prototype.slice.call(document.querySelectorAll('#header button'));
-  var html = '';
-  btns.forEach(function(b){
+  _fgItems = [];
+  Array.prototype.slice.call(document.querySelectorAll('#header button')).forEach(function(b){
     if(!b.id || skip[b.id]) return;
-    try { if(getComputedStyle(b).display === 'none') return; } catch(e){ return; }   // skryté právy → přeskoč
-    var icon = (b.textContent || '').trim().slice(0,2) || '•';
-    var label = (b.getAttribute('title') || b.textContent || '').trim();
-    html += '<button onclick="_fabGridGo(\'' + b.id + '\')" style="display:flex;align-items:center;gap:9px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 12px;font-size:13px;cursor:pointer;text-align:left;white-space:nowrap;">'
-      + '<span style="font-size:17px;line-height:1;">' + escapeHtml(icon) + '</span><span>' + escapeHtml(label) + '</span></button>';
+    try { if(getComputedStyle(b).display === 'none') return; } catch(e){ return; }
+    _fgItems.push({ id:b.id, icon:(b.textContent||'').trim().slice(0,2) || '•', label:(b.getAttribute('title')||'').trim() });
   });
-  menu.innerHTML = html || '<div style="color:var(--text2);padding:8px;font-size:13px;">Nic k zobrazení</div>';
 }
-function _fabGridGo(id){ closeFabGrid(); var b = document.getElementById(id); if(b) b.click(); }
-// Klik/ťuk mimo → zavři otevřený fan / „Vše"
-document.addEventListener('click', function(e){
-  var t = e.target;
-  if(document.body.classList.contains('fab-open') && !(t.closest && t.closest('#btn-fabmore,#btn-gps,#btn-measure,#btn-blok'))) closeFabMore();
-  if(document.body.classList.contains('grid-open') && !(t.closest && t.closest('#btn-fabgrid,#fabgrid-menu'))) closeFabGrid();
-}, true);
+function _fgTrigCenter(){ var t = document.getElementById('btn-fabgrid').getBoundingClientRect(); return { x:t.left+t.width/2, y:t.top+t.height/2 }; }
+function _fgRender(){
+  var dial = document.getElementById('fabgrid-dial'); if(!dial) return;
+  var n = _fgItems.length; if(!n){ dial.innerHTML=''; return; }
+  var c = _fgTrigCenter(), html = '';
+  for(var s=0; s<5; s++){
+    var idx = ((_fgCenter + (s-2)) % n + n) % n, it = _fgItems[idx], isC = (s===2);
+    var x = c.x + _FG_POS[s][0], y = c.y + _FG_POS[s][1];
+    html += '<button class="fg-slot" data-slot="'+s+'" data-id="'+it.id+'" title="'+escapeHtml(it.label)+'" '
+      + 'style="position:fixed;left:'+x+'px;top:'+y+'px;transform:translate(-50%,-50%) scale('+_FG_SCALE[s]+');opacity:'+_FG_OP[s]
+      + ';width:46px;height:46px;border-radius:50%;background:var(--panel2);border:2px solid '+(isC?'var(--accent2)':'var(--border)')
+      + ';color:var(--text);font-size:19px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 12px rgba(0,0,0,.5);z-index:1503;cursor:pointer;transition:left .16s,top .16s,transform .16s,opacity .16s;">'
+      + escapeHtml(it.icon) + '</button>';
+  }
+  // štítek středové položky vlevo od dialu
+  var ci = ((_fgCenter)%n+n)%n;
+  html += '<div style="position:fixed;left:'+(c.x-104)+'px;top:'+c.y+'px;transform:translate(-100%,-50%);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;max-width:42vw;overflow:hidden;text-overflow:ellipsis;box-shadow:0 3px 12px rgba(0,0,0,.5);z-index:1503;">'+escapeHtml(_fgItems[ci].label)+'</div>';
+  dial.innerHTML = html;
+}
+function _fgShift(d){ var n=_fgItems.length; if(!n) return; _fgCenter = ((_fgCenter + d) % n + n) % n; _fgRender(); }
+function toggleFabGrid(e){
+  if(e){ e.stopPropagation(); }
+  document.body.classList.remove('fab-open');
+  var open = document.body.classList.toggle('grid-open');
+  if(open){ _fgBuild(); _fgCenter = 0; requestAnimationFrame(_fgRender); try{ if(map && map.dragging) map.dragging.disable(); }catch(_){} }
+  else { closeFabGrid(); }
+}
+function closeFabGrid(){ document.body.classList.remove('grid-open'); try{ if(map && map.dragging) map.dragging.enable(); }catch(_){} }
+// ── ovládání ciferníku: rotary drag + kolečko + ťuk na slot ──
+(function(){
+  var dial = null;
+  function d(){ return dial || (dial = document.getElementById('fabgrid-dial')); }
+  document.addEventListener('pointerdown', function(e){
+    if(!document.body.classList.contains('grid-open')) return;
+    var el = d(); if(!el || !(e.target === el || (e.target.closest && e.target.closest('#fabgrid-dial,#btn-fabgrid')))) return;
+    var c = _fgTrigCenter();
+    _fgDrag = { ang: Math.atan2(e.clientY-c.y, e.clientX-c.x), acc:0 }; _fgSwiped = false;
+  }, true);
+  document.addEventListener('pointermove', function(e){
+    if(!_fgDrag) return;
+    var c = _fgTrigCenter(), a = Math.atan2(e.clientY-c.y, e.clientX-c.x);
+    var da = a - _fgDrag.ang; if(da > Math.PI) da -= 2*Math.PI; if(da < -Math.PI) da += 2*Math.PI;
+    _fgDrag.ang = a; _fgDrag.acc += da;
+    var step = 38 * Math.PI/180;
+    while(Math.abs(_fgDrag.acc) >= step){ var dir = _fgDrag.acc>0 ? 1 : -1; _fgShift(dir); _fgDrag.acc -= dir*step; _fgSwiped = true; }
+  }, true);
+  document.addEventListener('pointerup', function(){ _fgDrag = null; }, true);
+  document.addEventListener('wheel', function(e){
+    if(!document.body.classList.contains('grid-open')) return;
+    e.preventDefault(); _fgShift(e.deltaY>0 ? 1 : -1);
+  }, { passive:false, capture:true });
+  document.addEventListener('click', function(e){
+    // fan (⋯) – klik mimo zavře
+    var t = e.target;
+    if(document.body.classList.contains('fab-open') && !(t.closest && t.closest('#btn-fabmore,#btn-gps,#btn-measure,#btn-blok'))) closeFabMore();
+    // dial (🗂️)
+    if(!document.body.classList.contains('grid-open')) return;
+    var slot = t.closest && t.closest('.fg-slot');
+    if(slot){
+      e.stopPropagation();
+      if(_fgSwiped){ _fgSwiped = false; return; }   // kroužení nespustí položku
+      var s = parseInt(slot.getAttribute('data-slot'),10);
+      if(s === 2){ var id = slot.getAttribute('data-id'); closeFabGrid(); var b = document.getElementById(id); if(b) b.click(); }
+      else { _fgShift(s < 2 ? -(2-s) : (s-2)); }   // ťuk na kraj = posun dialu
+      return;
+    }
+    if(t.closest && t.closest('#btn-fabgrid')) return;   // klik na trigger řeší toggle
+    closeFabGrid();   // klik na overlay mimo = zavřít
+  }, true);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeFabMore(); closeFabGrid(); } });
+})();
 
 function rebuildProfSuggestions() {
   var dl = document.getElementById('prof-suggestions');
