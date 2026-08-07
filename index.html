@@ -115,16 +115,29 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 .toggle input:checked + .toggle-slider:before { transform:translateX(20px); }
 
 #btn-gps { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:all .2s; }
-#btn-foto-fab { position:fixed; bottom:144px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--accent2); color:var(--accent2); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+/* 📷 foťák = SAMOSTATNÝ přímý FAB (vpravo nahoře nad stackem) */
+#btn-foto-fab { position:fixed; bottom:204px; right:16px; left:auto; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--accent2); color:var(--accent2); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+/* ⋯ speed-dial: GPS/měření/blok jsou „fan children" kotvené u btn-fabmore (right:16, bottom:84) */
+#btn-gps, #btn-measure, #btn-blok { position:fixed; bottom:84px; right:16px; left:auto; width:46px; height:46px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:20px; cursor:pointer; z-index:1499; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); opacity:0; transform:scale(.4); pointer-events:none; transition:transform .22s cubic-bezier(.2,.8,.3,1.25), opacity .18s; }
+body.fab-open #btn-measure { opacity:1; pointer-events:auto; transform:translate(-58px,-54px); }
+body.fab-open #btn-gps     { opacity:1; pointer-events:auto; transform:translate(-72px,0); }
+body.fab-open #btn-blok    { opacity:1; pointer-events:auto; transform:translate(-58px,54px); }
+/* ⋯ trigger + 🗂️ Vše + ⌂ domeček */
+#btn-fabmore, #btn-fabgrid { position:fixed; right:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); transition:transform .22s; }
+#btn-fabmore { bottom:84px; }
+#btn-fabgrid { bottom:144px; }
+body.fab-open #btn-fabmore { transform:rotate(90deg); }
+#btn-home-fab { position:fixed; bottom:24px; left:16px; width:48px; height:48px; border-radius:50%; background:var(--panel2); border:2px solid var(--border); color:var(--text); font-size:22px; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+#fabgrid-menu { position:fixed; bottom:144px; right:74px; display:none; flex-direction:column; gap:6px; max-height:64vh; overflow-y:auto; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:8px; box-shadow:0 8px 30px rgba(0,0,0,.55); z-index:1502; }
+body.grid-open #fabgrid-menu { display:flex; }
 #btn-gps.active { border-color:var(--green); color:var(--green); box-shadow:0 0 16px rgba(72,187,120,.4); }
 
 /* Tlačítko ➕ Přidat (poznámka/úkol) – nad GPS tlačítkem */
-#btn-add { position:fixed; bottom:84px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--accent); border:2px solid var(--accent); color:#fff; font-size:26px; line-height:1; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.45); transition:all .2s; }
+#btn-add { position:fixed; bottom:24px; right:16px; width:48px; height:48px; border-radius:50%; background:var(--accent); border:2px solid var(--accent); color:#fff; font-size:26px; line-height:1; cursor:pointer; z-index:1500; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.45); transition:all .2s; }
 #btn-add:active { transform:scale(.92); }
 
 /* Měření vzdálenosti / plochy na mapě */
-#btn-measure{position:fixed;bottom:24px;left:16px;width:48px;height:48px;border-radius:50%;background:var(--panel2);border:2px solid var(--border);color:var(--text);font-size:20px;cursor:pointer;z-index:1500;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.4);}
-#btn-blok{position:fixed;bottom:84px;left:16px;width:48px;height:48px;border-radius:50%;background:var(--panel2);border:2px solid var(--border);color:var(--text);font-size:20px;cursor:pointer;z-index:1500;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.4);}
+/* #btn-measure, #btn-blok: pozicování řeší sdílený „fan child" blok výše (u btn-fabmore) */
 #measure-cross{display:none;position:fixed;z-index:1200;width:0;height:0;pointer-events:none;}
 #measure-cross.open{display:block;}
 #measure-cross::before,#measure-cross::after{content:'';position:absolute;background:#16a34a;box-shadow:0 0 2px rgba(255,255,255,.95);}
@@ -1160,10 +1173,10 @@ document.addEventListener('touchend', function(e){
 <div id="layers-panel">
   <h3>🗺️ Podklady</h3>
   <div id="basemap-row">
-    <button class="bm-btn" onclick="setBasemap('outdoor',this)">Outdoor</button>
+    <button class="bm-btn active" id="outdoor-btn" onclick="setBasemap('outdoor',this)">Outdoor</button>
     <button class="bm-btn" onclick="setBasemap('basic',this)">Basic</button>
     <button class="bm-btn" onclick="setBasemap('aerial',this)">Letecká</button>
-    <button class="bm-btn active" id="osm-btn" onclick="setBasemap('osm',this)">OSM</button>
+    <button class="bm-btn" id="osm-btn" onclick="setBasemap('osm',this)">OSM</button>
   </div>
   <div class="layer-row" data-perm="katastr">
     <label>🗺️ Katastr (KN)</label>
@@ -1309,11 +1322,19 @@ document.addEventListener('touchend', function(e){
   </div>
 </div>
 
+<!-- 📷 foťák = samostatný přímý FAB (vpravo nahoře) -->
 <button id="btn-foto-fab" onclick="takeStandalonePhoto()" title="Vyfotit (samostatná fotka)">📷</button>
-<button id="btn-gps" onclick="toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<!-- ➕ Přidat = přímé, pod ⋯ dialem -->
 <button id="btn-add" onclick="openAddChooser()" title="Přidat poznámku nebo úkol">➕</button>
-<button id="btn-measure" onclick="toggleMeasure()" title="Měřit délku / plochu na mapě">📏</button>
-<button id="btn-blok" onclick="openBlokPanel()" title="Poznámkový blok (osobní zápisník)">📝</button>
+<!-- ⋯ speed-dial + fan children (GPS/měření/blok) -->
+<button id="btn-fabmore" onclick="toggleFabMore(event)" title="Další nástroje">⋯</button>
+<button id="btn-gps" onclick="closeFabMore();toggleGpsBtn()" title="GPS zapnout/vypnout / centrovat">📍</button>
+<button id="btn-measure" onclick="closeFabMore();toggleMeasure()" title="Měřit délku / plochu na mapě">📏</button>
+<button id="btn-blok" onclick="closeFabMore();openBlokPanel()" title="Poznámkový blok (osobní zápisník)">📝</button>
+<!-- 🗂️ Vše (všechny panely) + ⌂ domeček -->
+<button id="btn-fabgrid" onclick="toggleFabGrid(event)" title="Vše – rychlý přístup na panely">🗂️</button>
+<div id="fabgrid-menu"></div>
+<button id="btn-home-fab" onclick="resetMapView()" title="Reset pohledu na mapu">⌂</button>
 <div id="measure-cross"></div>
 <div id="measure-hud">
   <div class="mrow" style="margin-bottom:4px;">
@@ -1902,9 +1923,10 @@ function initMap() {
   baseLayers.aerial =L.tileLayer(mUrl('aerial'), {maxZoom:23,maxNativeZoom:20,attribution:'© Mapy.cz'});
   baseLayers.osm    =L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     {maxZoom:23,maxNativeZoom:19,attribution:'© OpenStreetMap'});
-  // OSM jako výchozí – Mapy.cz vyžaduje registraci domény na api.mapy.cz
-  baseLayers.osm.addTo(map);
-  currentBasemap='osm';
+  // Výchozí podklad = Mapy.cz Outdoor (#89 konvence). Vyžaduje registraci domény GitHub Pages
+  // na api.mapy.cz k MAPY_API_KEY – pokud dlaždice nejedou, přepni v Podklady na OSM.
+  baseLayers.outdoor.addTo(map);
+  currentBasemap='outdoor';
 
   // Katastrální mapa ČÚZK - WMS overlay
   baseLayers.katastr = L.tileLayer.wms('https://services.cuzk.cz/wms/wms.asp', {
@@ -9261,6 +9283,35 @@ function deleteBlok(key){
   if(!confirm('Smazat tuto poznámku?')) return;
   db.ref('blok_poznamky/' + key).remove();
 }
+
+// ══════════ ⋯ Speed-dial (nástroje) + 🗂️ „Vše" (rychlý přístup na panely) – #89 ══════════
+function toggleFabMore(e){ if(e){ e.stopPropagation(); } document.body.classList.remove('grid-open'); document.body.classList.toggle('fab-open'); }
+function closeFabMore(){ document.body.classList.remove('fab-open'); }
+function toggleFabGrid(e){ if(e){ e.stopPropagation(); } document.body.classList.remove('fab-open'); var open = document.body.classList.toggle('grid-open'); if(open) renderFabGrid(); }
+function closeFabGrid(){ document.body.classList.remove('grid-open'); }
+// „Vše" staví položky přímo z tlačítek horní lišty → automaticky respektuje práva i budoucí tlačítka.
+function renderFabGrid(){
+  var menu = document.getElementById('fabgrid-menu'); if(!menu) return;
+  var skip = { 'btn-standalone-foto':1, 'btn-reset-view':1, 'btn-layers':1 };
+  var btns = Array.prototype.slice.call(document.querySelectorAll('#header button'));
+  var html = '';
+  btns.forEach(function(b){
+    if(!b.id || skip[b.id]) return;
+    try { if(getComputedStyle(b).display === 'none') return; } catch(e){ return; }   // skryté právy → přeskoč
+    var icon = (b.textContent || '').trim().slice(0,2) || '•';
+    var label = (b.getAttribute('title') || b.textContent || '').trim();
+    html += '<button onclick="_fabGridGo(\'' + b.id + '\')" style="display:flex;align-items:center;gap:9px;background:var(--panel2);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:8px 12px;font-size:13px;cursor:pointer;text-align:left;white-space:nowrap;">'
+      + '<span style="font-size:17px;line-height:1;">' + escapeHtml(icon) + '</span><span>' + escapeHtml(label) + '</span></button>';
+  });
+  menu.innerHTML = html || '<div style="color:var(--text2);padding:8px;font-size:13px;">Nic k zobrazení</div>';
+}
+function _fabGridGo(id){ closeFabGrid(); var b = document.getElementById(id); if(b) b.click(); }
+// Klik/ťuk mimo → zavři otevřený fan / „Vše"
+document.addEventListener('click', function(e){
+  var t = e.target;
+  if(document.body.classList.contains('fab-open') && !(t.closest && t.closest('#btn-fabmore,#btn-gps,#btn-measure,#btn-blok'))) closeFabMore();
+  if(document.body.classList.contains('grid-open') && !(t.closest && t.closest('#btn-fabgrid,#fabgrid-menu'))) closeFabGrid();
+}, true);
 
 function rebuildProfSuggestions() {
   var dl = document.getElementById('prof-suggestions');
