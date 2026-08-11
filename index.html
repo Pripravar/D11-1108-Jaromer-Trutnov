@@ -9462,6 +9462,7 @@ function _reportScreen(){
   return 'Mapa';
 }
 function openReport(){
+  if(window._reportJustDragged) return;   // tah ≠ tap
   if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
   if(typeof hasPerm === 'function' && !hasPerm('beruska')){ showToast('🔒 Hlášení Ti není povolené', 2400); return; }
   _reportSetTyp('chyba');
@@ -9573,6 +9574,36 @@ function _updateReportBadge(){
   // „Přijatá hlášení" tlačítko v inboxu jen adminovi
   var ib = document.getElementById('hlaseni-inbox-open'); if(ib) ib.style.display = adm ? 'block' : 'none';
 }
+// 🐞 PLOVOUCÍ (přetahovací) – chytni a přesuň kamkoli, pozice v localStorage 'reportPos'. Tah ≠ tap. #90
+function initReportDrag(){
+  var el = document.getElementById('btn-report'); if(!el) return;
+  try{ var p = JSON.parse(localStorage.getItem('reportPos') || 'null'); if(p && p.left != null && p.top != null){ el.style.left = p.left + 'px'; el.style.top = p.top + 'px'; el.style.transform = 'none'; } }catch(e){}
+  var drag = null;
+  el.addEventListener('pointerdown', function(e){
+    var r = el.getBoundingClientRect();
+    drag = { x0:e.clientX, y0:e.clientY, l0:r.left, t0:r.top, moved:false };
+    window._reportJustDragged = false;
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  el.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+    if(!drag.moved && (Math.abs(dx) + Math.abs(dy) < 6)) return;   // práh 6 px
+    drag.moved = true; window._reportJustDragged = true;
+    var w = el.offsetWidth, h = el.offsetHeight;
+    var left = Math.max(0, Math.min(window.innerWidth - w, drag.l0 + dx));
+    var top  = Math.max(0, Math.min(window.innerHeight - h, drag.t0 + dy));
+    el.style.left = left + 'px'; el.style.top = top + 'px'; el.style.transform = 'none';
+  });
+  function _up(){
+    if(!drag) return;
+    if(drag.moved){ try{ localStorage.setItem('reportPos', JSON.stringify({ left:parseInt(el.style.left,10), top:parseInt(el.style.top,10) })); }catch(_){} setTimeout(function(){ window._reportJustDragged = false; }, 60); }
+    drag = null;
+  }
+  el.addEventListener('pointerup', _up);
+  el.addEventListener('pointercancel', _up);
+}
+window.addEventListener('load', function(){ try{ initReportDrag(); }catch(e){} });
 
 // ══════════ ⋯ Speed-dial (nástroje) + 🗂️ „Vše" (rychlý přístup na panely) – #89 ══════════
 function toggleFabMore(e){ if(e){ e.stopPropagation(); } document.body.classList.remove('grid-open'); document.body.classList.toggle('fab-open'); }
@@ -14750,7 +14781,7 @@ function copyDiaryExport(){
 
 <!-- Geotechnický monitoring – panel s hledáním -->
 <!-- 🐞 Hlášení chyb / vylepšení – #90 -->
-<button id="btn-report" onclick="openReport()" title="Nahlásit chybu / navrhnout vylepšení" style="position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:9600;background:var(--panel);border:1px solid var(--border);border-left:none;border-radius:0 12px 12px 0;color:var(--text);padding:11px 8px;font-size:20px;cursor:pointer;box-shadow:2px 2px 12px rgba(0,0,0,.45);">🐞<span id="report-badge" style="display:none;position:absolute;top:-3px;right:-6px;background:#e94560;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;font-weight:700;">0</span></button>
+<button id="btn-report" onclick="openReport()" title="Nahlásit chybu / navrhnout vylepšení (dá se přetáhnout)" style="position:fixed;left:6px;top:50%;transform:translateY(-50%);z-index:9600;background:var(--panel);border:1px solid var(--border);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--text);font-size:20px;cursor:grab;box-shadow:0 4px 16px rgba(0,0,0,.45);touch-action:none;-webkit-user-select:none;user-select:none;">🐞<span id="report-badge" style="display:none;position:absolute;top:-3px;right:-3px;background:#e94560;color:#fff;font-size:10px;min-width:16px;height:16px;border-radius:8px;align-items:center;justify-content:center;padding:0 3px;font-weight:700;">0</span></button>
 
 <div id="hlaseni-report-modal" style="display:none;position:fixed;inset:0;z-index:9650;background:rgba(0,0,0,.7);align-items:center;justify-content:center;padding:14px;">
   <div style="background:var(--panel);border-radius:14px;width:min(96vw,440px);max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">
