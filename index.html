@@ -8525,6 +8525,7 @@ var FEATURES = [
   {key:'geo',        label:'Geotechnika (+ vrtné sondy)', btns:['btn-geo']},
   {key:'dokumenty',  label:'Dokumenty (KZP/TePř/protokoly)', btns:['btn-dokumenty']},
   {key:'zkousky',    label:'Zkoušky na stavbě',        btns:['btn-zkousky']},
+  {key:'prepinac',   label:'🗺️ Přepínač staveb (rozcestník)', btns:[]},   // řídí plovoucí tlačítko „Stavby" (OZ-JIH switcher)
   // ── Vrstvy v mapě – KAŽDÁ zvlášť ──
   {key:'fotomapa',   label:'🗺️ Vrstva: Fotky v mapě',  btns:[]},   // ⚠ NIKDY pod 'galerie'
   {key:'katastr',    label:'🗺️ Vrstva: Katastr (KN)',  btns:[]},
@@ -8595,6 +8596,9 @@ function applyPermsToUI(){
   // Prvky obalené data-perm="<klíč>" (řádky vrstev výkresů apod.) – skryj bez práva
   var wrapped = document.querySelectorAll('[data-perm]');
   for(var i=0;i<wrapped.length;i++){ wrapped[i].style.display = hasPerm(wrapped[i].getAttribute('data-perm')) ? '' : 'none'; }
+  // Plovoucí přepínač staveb (OZ-JIH) – řízeno stejným právem 'prepinac' (kategorie silnice=ano, sub/investor=ne, + osobní výjimka)
+  window.MSWState = { override: hasPerm('prepinac') };
+  if(typeof window.MSWInit === 'function'){ window.MSWInit(window.MSWState); }
 }
 // Backstop guard pro vstupní funkce (skrytí tlačítka je hlavní gate)
 function featGuard(key){ if(hasPerm(key)) return true; showToast('🔒 Tuhle funkci Ti admin nepovolil', 2600); return false; }
