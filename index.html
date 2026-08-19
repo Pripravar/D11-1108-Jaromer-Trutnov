@@ -1942,7 +1942,7 @@ function initMap() {
     version: '1.3.0'
   });
 
-  map.on('dragstart',function(){gpsCentering=false;});
+  map.on('movestart',function(){ if(!window._gpsSelfMove) gpsCentering=false; });   // #98a: cizí pohyb mapy (⌂/skok na pin) vypne centrování
   map.on('click',function(){closeLayersPanel();});
 
   // Při touch na PDF/prop panelu - vypni Leaflet aby nepřebíral pinch-zoom
@@ -2898,7 +2898,7 @@ function updateGPS(lat,lng) {
   else{gpsMarker.setLatLng([lat,lng]); gpsMarker.setIcon(icon);}
   var n=nearestOnRoute(lat,lng);
   document.getElementById('km-display').textContent='km '+fmtKm(gpxCumToRealKm(n.cum));
-  if(gpsCentering) map.setView([lat,lng],map.getZoom());
+  if(gpsCentering){ window._gpsSelfMove=true; map.setView([lat,lng],map.getZoom()); setTimeout(function(){ window._gpsSelfMove=false; },0); }
   // Geo připomínky – throttle na 1× za 60 s
   var _nowg = Date.now();
   if(!window._lastGeoRemind || _nowg - window._lastGeoRemind > 60000){
@@ -2909,7 +2909,7 @@ function updateGPS(lat,lng) {
 
 function centerGPS() {
   if(!gpsActive){document.getElementById('lyr-gps').checked=true;startGPS();}
-  else{gpsCentering=true;if(gpsMarker)map.setView(gpsMarker.getLatLng(),16);}
+  else{gpsCentering=true;if(gpsMarker){window._gpsSelfMove=true;map.setView(gpsMarker.getLatLng(),16);setTimeout(function(){window._gpsSelfMove=false;},0);}}
 }
 
 // ── VRSTVY ────────────────────────────
@@ -4045,6 +4045,7 @@ var _photoFsItem = null;  // celá meta fotky (kvůli datu pořízení při stah
 var _photoFsCommentsRef = null;  // aktivní listener komentářů (odpojit při zavření)
 
 function openPhotoFs(src, firebaseKey, item) {
+  var _br=document.getElementById('btn-report'); if(_br){ _br.dataset.prevDisp=_br.style.display||''; _br.style.display='none'; }   // #98b: beruška nepřekáží šipce zpět
   var url = (typeof src === 'string') ? src : src.src;
   document.getElementById('photo-fs-img').src = url;
   var ob = document.getElementById('photo-fs-open');
@@ -4223,6 +4224,7 @@ function showPhotoOnMap(){
 
 function closePhotoFs() {
   document.getElementById('photo-fs').classList.remove('open');
+  var _brR=document.getElementById('btn-report'); if(_brR){ _brR.style.display=_brR.dataset.prevDisp||''; }   // #98b: vrať berušku
   var menu = document.getElementById('photo-fs-menu'); if(menu) menu.style.display='none';
   var cpanel = document.getElementById('photo-fs-comments'); if(cpanel) cpanel.style.display='none';
   _detachPhotoComments();
@@ -5273,7 +5275,7 @@ function toggleGpsBtn() {
   } else if(!gpsCentering) {
     // GPS je zapnutá ale necentruje → centruj
     gpsCentering=true;
-    if(gpsMarker) map.setView(gpsMarker.getLatLng(),16);
+    if(gpsMarker){ window._gpsSelfMove=true; map.setView(gpsMarker.getLatLng(),16); setTimeout(function(){ window._gpsSelfMove=false; },0); }
     showToast('Centrování GPS zapnuto',1200);
   } else {
     // GPS centruje → vypni GPS
@@ -7290,6 +7292,8 @@ var _photoQueue = [];
 var _photoWorkerActive = false;
 var _photoPending = 0;   // počet fotek, které čekají/nahrávají se
 
+// #97a: české skloňování počtu (1→fotku, 2–4→fotky, 0/5+→fotek)
+function _czPlural(n, one, few, many){ n=Math.abs(n); if(n===1) return one; if(n>=2 && n<=4) return few; return many; }
 // ── Perzistentní fronta fotek v IndexedDB – fotka se NIKDY neztratí (opatření #96) ──
 // Uloží se do zařízení hned a smaže se AŽ po úspěšném zápisu na server. Přežije pád/zavření/výpadek.
 var _photoIDB = null;
@@ -7313,7 +7317,7 @@ function _restorePhotoQueue(){
     if(!jobs || !jobs.length) return;
     var added=0;
     jobs.forEach(function(j){ if(j && j.compressed && j.ts!=null && !_photoQueue.some(function(q){return q.ts===j.ts;})){ j.tries=0; _photoQueue.push(j); _photoPending++; added++; } });
-    if(added){ _updateUploadBadge(); _drainPhotoQueue(); showToast('📤 Dohrávám '+added+' '+(added===1?'fotku':'fotek')+' z minula…', 3500); }
+    if(added){ _updateUploadBadge(); _drainPhotoQueue(); showToast('📤 Dohrávám '+added+' '+_czPlural(added,'fotku','fotky','fotek')+' z minula…', 3500); }
   });
 }
 function _enqueuePhotoUpload(job){
@@ -7356,7 +7360,7 @@ function _updateUploadBadge(){
     document.body.appendChild(w);
   }
   if(failing){
-    w.innerHTML = '⚠️ '+_photoPending+' '+(_photoPending===1?'fotka se zatím NEULOŽILA':'fotek se zatím NEULOŽILO')+' na server – zkouším to dál.<br>Fotky jsou bezpečně uložené v telefonu a nahrají se samy, až server pojede. <b>Neztratí se.</b>';
+    w.innerHTML = '⚠️ '+_photoPending+' '+_czPlural(_photoPending,'fotka se zatím NEULOŽILA','fotky se zatím NEULOŽILY','fotek se zatím NEULOŽILO')+' na server – zkouším to dál.<br>Fotky jsou bezpečně uložené v telefonu a nahrají se samy, až server pojede. <b>Neztratí se.</b>';
     w.style.display = 'block';
   } else { w.style.display = 'none'; }
   var el = document.getElementById('upload-badge');
