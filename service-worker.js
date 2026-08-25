@@ -2,7 +2,7 @@
 // Strategie: network-first pro index.html (vždy čerstvá appka po pull-to-refresh),
 // cache-first jako fallback při výpadku sítě. PDF a dlaždice se NEcacheují.
 // Verzi zvyš při každém deployi, ať se stará cache invaliduje.
-var CACHE = 'd11-app-v26';
+var CACHE = 'd11-app-v26-fcm27';
 var SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', function(e){
@@ -58,7 +58,9 @@ self.addEventListener('push', function(event) {
     tag:     (data.data && data.data.taskId) || 'stavba-notify',
     renotify: true
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(self.registration.showNotification(title, options).then(function(){
+    try{ if(self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge(); }catch(e){}
+  }));
 });
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
