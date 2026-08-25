@@ -2,7 +2,7 @@
 // Strategie: network-first pro index.html (vždy čerstvá appka po pull-to-refresh),
 // cache-first jako fallback při výpadku sítě. PDF a dlaždice se NEcacheují.
 // Verzi zvyš při každém deployi, ať se stará cache invaliduje.
-var CACHE = 'd11-app-v26-fcm27';
+var CACHE = 'd11-app-v26-fcm27-chat1';
 var SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', function(e){
@@ -43,6 +43,14 @@ self.addEventListener('fetch', function(e){
 });
 
 // ── Push notifikace (Web Push / FCM) – sjednoceno se šablonou ──
+/* Odznáček na ikoně na ploše – trvalý čítač (přežije zavření appky). Ukládá se přes Cache API;
+   appka po otevření pošle {type:'clearBadge'} → vynulujeme. Číslo (ne prázdný dot) se na iOS zobrazí spolehlivěji. */
+async function _badgeGet(){ try{ var c=await caches.open('ms-badge'); var r=await c.match('count'); return r ? (parseInt(await r.text(),10)||0) : 0; }catch(e){ return 0; } }
+async function _badgePut(n){ try{ var c=await caches.open('ms-badge'); await c.put('count', new Response(String(n))); }catch(e){} }
+async function _bumpAppBadge(){ try{ var n=(await _badgeGet())+1; await _badgePut(n); if(self.navigator && self.navigator.setAppBadge) await self.navigator.setAppBadge(n); }catch(e){} }
+async function _clearAppBadgeSW(){ try{ await _badgePut(0); if(self.navigator && self.navigator.clearAppBadge) await self.navigator.clearAppBadge(); }catch(e){} }
+self.addEventListener('message', function(e){ if(e.data && e.data.type==='clearBadge'){ if(e.waitUntil) e.waitUntil(_clearAppBadgeSW()); else _clearAppBadgeSW(); } });
+
 self.addEventListener('push', function(event) {
   var data = {};
   try { data = event.data ? event.data.json() : {}; } catch(e) {
@@ -59,7 +67,7 @@ self.addEventListener('push', function(event) {
     renotify: true
   };
   event.waitUntil(self.registration.showNotification(title, options).then(function(){
-    try{ if(self.navigator && self.navigator.setAppBadge) self.navigator.setAppBadge(); }catch(e){}
+    _bumpAppBadge();
   }));
 });
 self.addEventListener('notificationclick', function(event) {
