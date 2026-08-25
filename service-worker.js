@@ -41,3 +41,40 @@ self.addEventListener('fetch', function(e){
   // ostatní same-origin: cache-first.
   e.respondWith(caches.match(req).then(function(m){ return m || fetch(req); }));
 });
+
+// ── Push notifikace (Web Push / FCM) – sjednoceno se šablonou ──
+self.addEventListener('push', function(event) {
+  var data = {};
+  try { data = event.data ? event.data.json() : {}; } catch(e) {
+    try { data = { notification: { title: 'Notifikace', body: event.data.text() } }; } catch(_) {}
+  }
+  var n = data.notification || {};
+  var title = n.title || 'D11 – most Jaroměř–Trutnov';
+  var options = {
+    body:    n.body || '',
+    icon:    n.icon || './manifest.json',
+    badge:   n.badge,
+    data:    data.data || {},
+    tag:     (data.data && data.data.taskId) || 'stavba-notify',
+    renotify: true
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var taskId = event.notification.data && event.notification.data.taskId;
+  var url = './' + (taskId ? ('#task=' + encodeURIComponent(taskId)) : '');
+  event.waitUntil(
+    self.clients.matchAll({type:'window', includeUncontrolled:true}).then(function(list){
+      for(var i=0; i<list.length; i++) {
+        var c = list[i];
+        if(c.url.indexOf(self.location.origin) === 0 && 'focus' in c) {
+          c.focus();
+          if('navigate' in c) c.navigate(url);
+          return;
+        }
+      }
+      if(self.clients.openWindow) return self.clients.openWindow(url);
+    })
+  );
+});
