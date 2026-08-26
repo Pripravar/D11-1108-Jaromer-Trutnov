@@ -75,6 +75,12 @@ exports.sendTaskNotifications = functions
       recipientUids = (rec.recipientUids || []).filter(Boolean);
     }
 
+    if(rec.typ === 'zminka') {
+      title = '💬 Označení' + (rec.label ? (' – ' + rec.label) : '');
+      body = (rec.zadalName || 'Někdo') + ': ' + (rec.komentText || '');
+      recipientUids = (rec.recipientUids || []).filter(Boolean);
+    }
+
     recipientUids = [...new Set(recipientUids)];
 
     if(recipientUids.length === 0) {
@@ -92,6 +98,7 @@ exports.sendTaskNotifications = functions
     // Najít FCM tokeny příjemců
     const usersSnap = await db.ref('/uzivatele').once('value');
     const users = usersSnap.val() || {};
+    if(rec.typ === 'chat' && rec.kanalId){ recipientUids = recipientUids.filter(uid => !(users[uid] && users[uid].chatMute && users[uid].chatMute[rec.kanalId] === true)); }
     const rawTokens = [];
     recipientUids.forEach(uid => {
       const u = users[uid];
@@ -111,6 +118,7 @@ exports.sendTaskNotifications = functions
       notification: { title, body },
       data: {
         taskId: rec.taskId || '',
+        kanalId: rec.kanalId || '',
         fotoKey: rec.fotoKey || '',
         typ:    rec.typ    || '',
         priorita: prio
