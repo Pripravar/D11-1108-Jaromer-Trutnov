@@ -246,7 +246,7 @@ body.grid-open #fabgrid-dial { display:block; }
 #pdf-panel.open { display:flex; }
 #pdf-panel.fullscreen { height:100vh; top:0; }
 #pdf-header { display:flex; align-items:center; padding:6px 10px; background:var(--panel2); gap:6px; flex-shrink:0; }
-#pdf-title { flex:1; font-size:12px; font-weight:600; color:var(--accent2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#pdf-title { flex:1 1 0; min-width:0; font-size:12px; font-weight:600; color:var(--accent2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 #pdf-counter { font-size:11px; color:var(--text2); white-space:nowrap; }
 #btn-pdf-close,#btn-pdf-fs { background:none; border:none; color:var(--text2); font-size:18px; cursor:pointer; padding:2px 6px; min-width:44px; min-height:44px; display:inline-flex; align-items:center; justify-content:center; }
 #btn-pdf-close:hover,#btn-pdf-fs:hover { color:var(--text); }
@@ -560,11 +560,11 @@ textarea.note-field { min-height:80px; resize:vertical; }
 #prop-panel.open { display: flex; }
 #prop-panel.fullscreen { height: 100vh; top: 0; }
 #prop-header {
-  display: flex; align-items: center;
+  display: flex; flex-wrap: wrap; align-items: center;
   padding: 8px 10px; background: var(--panel2);
   gap: 6px; flex-shrink: 0;
 }
-#prop-title { flex:1; font-size:13px; font-weight:700; color:#4fc3f7; }
+#prop-title { flex:1 1 0; min-width:70px; font-size:13px; font-weight:700; color:#4fc3f7; }
 #btn-prop-fs, #btn-prop-close {
   background:none; border:none; color:var(--text2); font-size:18px; cursor:pointer; padding:4px 6px;
 }
@@ -1031,7 +1031,7 @@ textarea.diary-field { resize:none; min-height:60px; }
    ═══════════════════════════════════════════════════════ */
 #kzp-panel { position:fixed; top:0; left:0; right:0; bottom:0; z-index:3700; background:var(--bg); display:none; flex-direction:column; }
 #kzp-panel.open { display:flex; }
-#kzp-header { background:var(--panel); border-bottom:1px solid var(--border); padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top)); display:flex; align-items:center; gap:8px; flex-shrink:0; }
+#kzp-header { background:var(--panel); border-bottom:1px solid var(--border); padding:10px 14px; padding-top:calc(10px + env(safe-area-inset-top)); display:flex; flex-wrap:wrap; align-items:center; gap:8px; flex-shrink:0; }
 #kzp-header h2 { flex:1; font-size:15px; color:var(--accent2); }
 #kzp-header button { background:var(--panel2); border:1px solid var(--border); border-radius:8px; color:var(--text); padding:6px 10px; font-size:13px; cursor:pointer; }
 #kzp-filter-bar { display:flex; gap:6px; padding:10px 12px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; align-items:center; flex-wrap:wrap; }
@@ -1601,9 +1601,12 @@ document.addEventListener('touchend', function(e){
     <button id="btn-pdf-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-pdf-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
     <button onclick="openFileExternal(currentPdfSrc)" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
+    <button id="btn-pdf-del-vykres" onclick="deleteCurrentDocVykres()" title="Smazat nahraný výkres" style="display:none;background:none;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:4px 6px;flex-shrink:0;">🗑</button>
+    <button id="btn-pdf-invalidate" onclick="toggleInvalidateCurrentDoc()" title="Zneplatnit tento výkres" style="display:none;background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;flex-shrink:0;">🗄️</button>
     <button id="btn-pdf-fs" onclick="togglePdfFs()">⛶</button>
     <button id="btn-pdf-close" onclick="closePdf()">✕</button>
   </div>
+  <div id="pdf-viewswitch" style="display:none;gap:6px;padding:6px 10px 0;background:var(--bg);flex-shrink:0;"></div>
   <div id="pdf-tabs"></div>
   <div id="pdf-frame-wrap" style="flex:1;display:flex;flex-direction:column;background:#222;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y pinch-zoom;">
     <iframe id="pdf-frame" src=""
@@ -2406,45 +2409,52 @@ function onStaniceniClick(realKm) {
   var pages = [];
   // Situace – VŠECHNY pasující SO listy (101, 102, 103, 104, 105, 106, 107)
   findDocsForKm(DOCS_SITUACE, realKm).forEach(function(d, i) {
-    pages.push({soubor:d.soubor, nazev:d.nazev, typ:'📐 Situace'+(i?' '+(i+1):'')});
+    pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'📐 Situace'+(i?' '+(i+1):'')});
   });
   // Podélné profily – VŠECHNY pasující
   findDocsForKm(DOCS_PP, realKm).forEach(function(d, i) {
-    pages.push({soubor:d.soubor, nazev:d.nazev, typ:'📊 Pod. profil'+(i?' '+(i+1):'')});
+    pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'📊 Pod. profil'+(i?' '+(i+1):'')});
   });
   // Vzorové řezy – VŠECHNY pasující (typicky SO 101 + SO 102 nebo SO 103)
   findDocsForKm(DOCS_VPR, realKm).forEach(function(d, i) {
-    pages.push({soubor:d.soubor, nazev:d.nazev, typ:'✂️ Vzor. řezy'+(i?' '+(i+1):'')});
+    pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'✂️ Vzor. řezy'+(i?' '+(i+1):'')});
   });
   // Char. řezy – z DOCS_CHPR (jeden pro celé SO 101)
   if(typeof DOCS_CHPR !== 'undefined') {
     findDocsForKm(DOCS_CHPR, realKm).forEach(function(d) {
-      pages.push({soubor:d.soubor, nazev:d.nazev, typ:'✂️ Char. řezy'});
+      pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'✂️ Char. řezy'});
     });
   }
   // Kladečské plány – z DOCS_KLAD (zatím jen SO 103)
   if(typeof DOCS_KLAD !== 'undefined') {
     findDocsForKm(DOCS_KLAD, realKm).forEach(function(d, i) {
-      pages.push({soubor:d.soubor, nazev:d.nazev, typ:'🧱 Klad. plán'+(i?' '+(i+1):'')});
+      pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'🧱 Klad. plán'+(i?' '+(i+1):'')});
     });
   }
   // Dopravní značení – VŠECHNY pasující
   findDocsForKm(DOCS_DZ, realKm).forEach(function(d, i) {
-    pages.push({soubor:d.soubor, nazev:d.nazev, typ:'🚦 Sit. DZ'+(i?' '+(i+1):'')});
+    pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'🚦 Sit. DZ'+(i?' '+(i+1):'')});
   });
   // Technická zpráva – kontextová pro SO 101
   if(typeof DOCS_TZ !== 'undefined') {
     findDocsForKm(DOCS_TZ, realKm).forEach(function(d) {
-      pages.push({soubor:d.soubor, nazev:d.nazev, typ:'📋 Tech. zpráva'});
+      pages.push({dokTyp:'PDPS', soubor:d.soubor, nazev:d.nazev, typ:'📋 Tech. zpráva'});
     });
   }
-  openDocPanel(pages, realKm, 0);
+  // + nahrané výkresy hlavní trasy (RDS i PDPS) – zobrazí se na KAŽDÉM staničení
+  _ensureTrasaVyk();
+  window._docStaticPages = pages.slice();
+  openDocPanel(pages.concat(_trasaPages()), realKm, 0, true);
 }
 
-function openDocPanel(pages, realKm, startIdx) {
+function openDocPanel(pages, realKm, startIdx, switchMode) {
   if(typeof hasPerm==='function' && !hasPerm('pdf')){ showToast('🔒 Výkresy Ti nejsou povolené', 2500); return; }
-  docPages   = pages;
-  docPageIdx = startIdx || 0;
+  window._docSwitchMode = !!switchMode;   // přepínač PDPS/RDS jen na staničení, ne u geotechniky apod.
+  window._docPanelKm = (typeof realKm==='number') ? realKm : null;
+  var start = (pages||[])[startIdx||0];
+  docPages   = finalizeDocPages(pages||[]);
+  docPageIdx = Math.max(0, docPages.indexOf(start));
+  if(window._docSwitchMode && docPages[docPageIdx] && docPages[docPageIdx]._invalid) docPageIdx = 0;   // začni na platném
 
   // Resetuj iframe vždy před novým načtením
   var frame = document.getElementById('pdf-frame');
@@ -2456,16 +2466,10 @@ function openDocPanel(pages, realKm, startIdx) {
   // Odemkni viewport, ať iOS Safari může na iframu pinch-zoomovat PDF
   unlockViewport();
 
-  // Sestav záložky
-  var tabs = document.getElementById('pdf-tabs');
-  tabs.innerHTML = '';
-  pages.forEach(function(p, i) {
-    var btn = document.createElement('button');
-    btn.className = 'pdf-tab' + (i===docPageIdx?' active':'');
-    btn.textContent = p.typ;
-    btn.onclick = (function(idx){return function(){docGoTo(idx);};})(i);
-    tabs.appendChild(btn);
-  });
+  // Výchozí pohled = skupina prvního (platného) výkresu: PDPS / RDS
+  window._docView = docPages.length ? _docGroupOf(docPages[docPageIdx]) : 'PDPS';
+  renderDocSwitch();
+  renderDocTabs();
 
   // Malé zpoždění aby se about:blank stihl nastavit
   setTimeout(function(){ renderDocPage(realKm); }, 50);
@@ -2851,6 +2855,7 @@ function openPdfExternal() {
 }
 
 function renderDocPage(realKm) {
+  if(realKm==null) realKm = window._docPanelKm;
   var title  = document.getElementById('pdf-title');
   var ctr    = document.getElementById('pdf-counter');
   var btnP   = document.getElementById('btn-pdf-prev');
@@ -2858,28 +2863,84 @@ function renderDocPage(realKm) {
   var frameWrap = document.getElementById('pdf-frame-wrap');
   var openWrap  = document.getElementById('pdf-open-btn-wrap');
   var nosit  = document.getElementById('pdf-nosit');
+  var invBtn = document.getElementById('btn-pdf-invalidate');
+  var delBtn = document.getElementById('btn-pdf-del-vykres');
+  var invBar = document.getElementById('pdf-invalid-bar');
+  if(delBtn) delBtn.style.display = 'none';
 
-  // Aktualizuj záložky
-  document.querySelectorAll('.pdf-tab').forEach(function(b,i){
-    b.classList.toggle('active', i===docPageIdx);
-  });
-
-  if(docPages.length===0){
+  function _empty(html, ttl){
+    var fr = document.getElementById('pdf-frame'); if(fr) fr.src = 'about:blank';
     if(frameWrap) frameWrap.style.display='none';
     if(openWrap)  openWrap.style.display='none';
-    nosit.style.display='flex';
-    title.textContent='Výkresy — km '+(realKm?fmtKm(realKm):'');
+    nosit.innerHTML = html; nosit.style.display='flex';
+    title.textContent = ttl;
     ctr.textContent=''; btnP.disabled=true; btnN.disabled=true;
+    if(invBtn) invBtn.style.display='none';
+    if(invBar) invBar.style.display='none';
+    currentPdfSrc = '';
+  }
+
+  if(docPages.length===0){
+    if(!window._docSwitchMode){ var sw0=document.getElementById('pdf-viewswitch'); if(sw0){ sw0.style.display='none'; sw0.innerHTML=''; } }
+    _empty('<span>📄</span><div>Pro toto staničení nejsou výkresy k dispozici'+(window._docSwitchMode?'<br><span style="font-size:12px;opacity:.8;">RDS nahraješ přes ➕ nahoře (i více PDF naráz).</span>':'')+'</div>',
+      'Výkresy — km '+(realKm?fmtKm(realKm):''));
     return;
   }
 
+  // Režim přepínače – zvolená skupina (PDPS/RDS/Neplatné) je prázdná → hláška, ne cizí PDF
+  if(window._docSwitchMode){
+    var vlist0 = _docIdxInView();
+    if(vlist0.length===0){
+      var lbl = (window._docView==='RDS') ? 'RDS výkresy' : (window._docView==='NEPLATNE' ? 'neplatné výkresy' : 'PDPS výkresy');
+      _empty('<span>📄</span><div>Na tomto úseku zatím nejsou žádné '+lbl+'.'+(window._docView==='RDS'?'<br><span style="font-size:12px;opacity:.8;">Nahraj je přes ➕ nahoře (i více PDF naráz).</span>':'')+'</div>',
+        (window._docView==='RDS'?'📗 RDS':(window._docView==='NEPLATNE'?'⛔ Neplatné':'📘 PDPS')));
+      document.querySelectorAll('#pdf-tabs .pdf-tab').forEach(function(b){ b.classList.remove('active'); });
+      return;
+    }
+    if(vlist0.indexOf(docPageIdx)===-1) docPageIdx = vlist0[0];
+  }
+
+  // Aktualizuj záložky (porovnání dle reálného indexu v data-idx)
+  document.querySelectorAll('#pdf-tabs .pdf-tab').forEach(function(b){
+    b.classList.toggle('active', parseInt(b.getAttribute('data-idx'),10)===docPageIdx);
+  });
+
   var p = docPages[docPageIdx];
   title.textContent = p.nazev || p.typ || '';
-  ctr.textContent   = (docPageIdx+1)+' / '+docPages.length;
-  btnP.disabled = docPageIdx===0;
-  btnN.disabled = docPageIdx===docPages.length-1;
+  // Čítač a navigace v rámci aktuálního pohledu (PDPS / RDS / Neplatné)
+  var viewList = _docIdxInView();
+  var posInView = viewList.indexOf(docPageIdx);
+  ctr.textContent   = (posInView+1)+' / '+viewList.length;
+  btnP.disabled = posInView<=0;
+  btnN.disabled = posInView===viewList.length-1;
   nosit.style.display = 'none';
   currentPdfSrc = p.soubor;
+
+  // Zneplatnit / obnovit (statický i nahraný výkres) + koš u vlastního nahraného
+  if(invBtn){
+    invBtn.style.display = 'inline-flex';
+    if(p._invalid){ invBtn.textContent='♻️'; invBtn.title='Obnovit výkres jako platný'; }
+    else { invBtn.textContent='🗄️'; invBtn.title='Zneplatnit tento výkres (s důvodem)'; }
+  }
+  if(delBtn) delBtn.style.display = (p._uploaded && isOwner(p,'uid')) ? 'inline-flex' : 'none';
+
+  // Červený pruh s důvodem u zneplatněného výkresu
+  if(p._invalid){
+    if(!invBar){
+      invBar=document.createElement('div');
+      invBar.id='pdf-invalid-bar';
+      invBar.style.cssText='background:#c0392b;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;flex-shrink:0;';
+      var wrapEl=document.getElementById('pdf-frame-wrap');
+      wrapEl.parentNode.insertBefore(invBar, wrapEl);
+    }
+    var det=[];
+    if(p._by) det.push('zneplatnil '+escapeHtml(p._by));
+    if(p._ts) det.push(new Date(p._ts).toLocaleDateString('cs-CZ'));
+    invBar.innerHTML='⛔ <b>NEPLATNÝ VÝKRES</b>'+
+      (p._duvod?(' — '+escapeHtml(p._duvod)):'')+
+      (det.length?('<div style="opacity:.85;margin-top:2px;">'+det.join(' · ')+'</div>'):'');
+    invBar.style.display='block';
+  } else if(invBar){ invBar.style.display='none'; }
 
   // VŽDY iframe (jako Votice). V Safari iOS dostane nativní PDF viewer
   // s toolbarem a pinch-zoom. V PWA módu iframe zobrazí PDF základně, plnou
@@ -2891,21 +2952,23 @@ function renderDocPage(realKm) {
   if(zoomIn)  zoomIn.style.display  = 'none';
   if(zoomOut) zoomOut.style.display = 'none';
   var frame = document.getElementById('pdf-frame');
+  var keep = window._docKeepFrame; window._docKeepFrame = false;
   // Velmi hustý výkres na mobilu → nepouštět do iframu (spadlo by), nabídnout nativní prohlížeč
   if(isMobile() && jeVelkyVykres(p.soubor)) {
     if(frame) { frame.src = 'about:blank'; }
     if(frameWrap) frameWrap.style.display = 'none';
     if(openWrap) {
       openWrap.style.display = 'flex';
-      var lbl = document.getElementById('pdf-open-label');
-      if(lbl) lbl.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
+      var lbl2 = document.getElementById('pdf-open-label');
+      if(lbl2) lbl2.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
         '<br><span style="font-size:11px;">Vestavěný náhled by na telefonu spadl – otevři ho v prohlížeči.</span>' +
         '<br><a onclick="docForceIframe()" style="color:var(--accent2);cursor:pointer;text-decoration:underline;font-size:12px;">přesto zkusit zobrazit zde</a>';
     }
   } else {
     if(openWrap)  openWrap.style.display  = 'none';
     if(frameWrap) frameWrap.style.display = 'flex';
-    if(frame) setPdfFrameAsync(frame, p.soubor);
+    // Při překreslení (nový upload kolegy, revize) neresetuj stejný výkres
+    if(frame && !(keep && frame.src && frame.src!=='about:blank')) setPdfFrameAsync(frame, p.soubor);
   }
 }
 
@@ -3000,11 +3063,291 @@ function renderPdfOnCanvas(pdfUrl) {
 }
 
 function docNav(dir) {
-  var newIdx = docPageIdx + dir;
-  if(newIdx<0||newIdx>=docPages.length) return;
-  docPageIdx = newIdx;
-  renderDocPage();
+  // Pohyb v rámci aktuálního pohledu (PDPS / RDS / Neplatné)
+  var list = _docIdxInView();
+  var pos = list.indexOf(docPageIdx);
+  if(pos===-1) return;
+  var np = pos + dir;
+  if(np<0||np>=list.length) return;
+  docPageIdx = list[np];
+  renderDocPage(window._docPanelKm);
 }
+
+// ── Výkresy: PDPS / RDS / ⛔ Neplatné (jako D10) ──
+window._docView='PDPS';
+window._docSwitchMode=false;
+window._propView='PDPS';
+// Platné napřed, neplatné (vykresy/_revize) na konec + důvod/kdo/kdy pro červený pruh
+function finalizeDocPages(pages){
+  var valid=[], invalid=[];
+  (pages||[]).forEach(function(p){
+    var r = (p && p.soubor) ? _vykRevize[_revKey(p.soubor)] : null;
+    p._invalid = !!r;
+    if(r){ p._duvod = r.duvod||''; p._by = r.by||''; p._ts = r.ts||0; invalid.push(p); }
+    else valid.push(p);
+  });
+  return valid.concat(invalid);
+}
+function _docGroupOf(p){
+  if(!p) return 'PDPS';
+  if(p._invalid) return 'NEPLATNE';
+  return (p.dokTyp==='RDS') ? 'RDS' : 'PDPS';
+}
+function _docTabLabel(p){ return (p._invalid?'⛔ ':'') + (p._uploaded?'🆕 ':'') + (p.typ || p.nazev || 'Výkres'); }
+function _docIdxInView(){
+  var out=[];
+  for(var i=0;i<docPages.length;i++){ if(!window._docSwitchMode || _docGroupOf(docPages[i])===window._docView) out.push(i); }
+  return out;
+}
+function renderDocSwitch(){
+  var sw=document.getElementById('pdf-viewswitch'); if(!sw) return;
+  if(!window._docSwitchMode){ sw.style.display='none'; sw.innerHTML=''; return; }
+  var cnt={PDPS:0,RDS:0,NEPLATNE:0};
+  docPages.forEach(function(p){ cnt[_docGroupOf(p)]++; });
+  var groups=[ {k:'PDPS', lbl:'📘 PDPS'}, {k:'RDS', lbl:'📗 RDS'} ];
+  if(cnt.NEPLATNE>0) groups.push({k:'NEPLATNE', lbl:'⛔ Neplatné'});
+  sw.style.display='flex';
+  sw.innerHTML='';
+  groups.forEach(function(g){
+    var on=(window._docView===g.k);
+    var b=document.createElement('button');
+    b.textContent=g.lbl+' ('+cnt[g.k]+')';
+    b.style.cssText='flex:1;padding:7px 8px;font-size:12px;font-weight:700;cursor:pointer;border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none;'+
+      (on ? 'background:var(--accent);color:#fff;' : 'background:var(--panel);color:var(--text2);');
+    b.onclick=(function(k){return function(){ setDocView(k); };})(g.k);
+    sw.appendChild(b);
+  });
+  // ➕ nahrát výkres(y) hlavní trasy – v řádku přepínače (hlavička na telefonu nepřeteče)
+  var add=document.createElement('button');
+  add.id='btn-add-vykres'; add.textContent='➕'; add.title='Přidat výkres(y) hlavní trasy – i více PDF naráz (RDS/PDPS)';
+  add.style.cssText='flex:0 0 auto;min-width:44px;padding:7px 12px;font-size:14px;font-weight:800;cursor:pointer;border-radius:8px 8px 0 0;border:1px solid var(--accent);border-bottom:none;background:var(--accent);color:#fff;';
+  add.onclick=addVykresTrasa;
+  sw.appendChild(add);
+}
+function renderDocTabs(){
+  var tabs=document.getElementById('pdf-tabs'); if(!tabs) return;
+  tabs.innerHTML='';
+  _docIdxInView().forEach(function(idx){
+    var p=docPages[idx];
+    var btn=document.createElement('button');
+    btn.className='pdf-tab'+(idx===docPageIdx?' active':'');
+    btn.setAttribute('data-idx', idx);
+    btn.textContent=_docTabLabel(p);
+    btn.title=(p.nazev||p.typ||'')+(p._invalid?' (neplatný)':'');
+    btn.style.maxWidth='200px'; btn.style.overflow='hidden'; btn.style.textOverflow='ellipsis'; btn.style.whiteSpace='nowrap';
+    if(p._invalid){ btn.style.opacity='0.6'; btn.style.fontStyle='italic'; }
+    btn.onclick=(function(i){return function(){docGoTo(i);};})(idx);
+    tabs.appendChild(btn);
+  });
+}
+function setDocView(v){
+  window._docView=v;
+  var list=_docIdxInView();
+  if(list.length){ docPageIdx=list[0]; }
+  renderDocSwitch();
+  renderDocTabs();
+  renderDocPage(window._docPanelKm);
+}
+// Přestavět otevřený panel (nový upload / revize) – zůstane na stejném výkresu
+function rebuildDocPanel(){
+  var panel=document.getElementById('pdf-panel'); if(!panel || !panel.classList.contains('open')) return;
+  var cur=docPages[docPageIdx], curSrc=cur&&cur.soubor, oldGroup=cur?_docGroupOf(cur):null;
+  var base = window._docSwitchMode ? (window._docStaticPages||[]).concat(_trasaPages()) : docPages.slice();
+  docPages = finalizeDocPages(base);
+  var ni=-1; docPages.forEach(function(p,i){ if(ni<0 && curSrc && p.soubor===curSrc) ni=i; });
+  docPageIdx = (ni>=0) ? ni : 0;
+  if(window._docSwitchMode && ni>=0){ var ng=_docGroupOf(docPages[ni]); if(oldGroup!==ng && window._docView===oldGroup) window._docView=ng; }
+  if(window._docSwitchMode && !_docIdxInView().length && docPages.length && window._docView!=='RDS') window._docView=_docGroupOf(docPages[0]);
+  renderDocSwitch(); renderDocTabs();
+  window._docKeepFrame = (ni>=0);
+  renderDocPage(window._docPanelKm);
+}
+// Nahrané výkresy hlavní trasy  vykresy/trasa  (živě, sdílené s týmem)
+window._trasaVyk = [];
+function _ensureTrasaVyk(){
+  if(window._trasaBound || typeof db==='undefined' || !db) return;
+  window._trasaBound = true;
+  db.ref('vykresy/trasa').on('value', function(snap){
+    var arr=[];
+    snap.forEach(function(ch){
+      var v=ch.val(); if(!v || !v.soubor) return;
+      arr.push({ typ:(v.nazev||'Nahraný výkres'), nazev:(v.nazev||'Nahraný výkres'), soubor:v.soubor,
+        dokTyp:(v.dokTyp==='PDPS'?'PDPS':'RDS'), _uploaded:true, _dbKey:ch.key, _soKey:'trasa',
+        uid:(v.uid||null), author:(v.author||''), ts:(v.ts||0) });
+    });
+    window._trasaVyk = arr;
+    var pp=document.getElementById('pdf-panel');
+    if(pp && pp.classList.contains('open') && window._docSwitchMode) rebuildDocPanel();
+  }, function(e){ console.warn('vykresy/trasa:', e); });
+}
+function _trasaPages(){ return (window._trasaVyk||[]).map(function(p){ var c={}; for(var k in p) c[k]=p[k]; return c; }); }
+function toggleInvalidateCurrentDoc(){
+  if(!docPages || !docPages.length) return;
+  _invalidateDrawing(docPages[docPageIdx], rebuildDocPanel);
+}
+function deleteCurrentDocVykres(){
+  var p = docPages[docPageIdx];
+  if(!p || !p._uploaded) return;
+  if(!isOwner(p, 'uid')) { showToast('Smazat může jen ten, kdo výkres nahrál', 3000); return; }
+  if(!confirm('Smazat nahraný výkres "' + (p.nazev || '') + '"?\n(Když jen vyšla nová verze, použij raději 🗄️ Zneplatnit.)')) return;
+  db.ref('vykresy/' + p._soKey + '/' + p._dbKey).remove()
+    .then(function(){ showToast('🗑️ Výkres smazán', 1800); })
+    .catch(function(){ showToast('❌ Mazání selhalo', 2500); });
+}
+// Zneplatnění / obnovení – statický i nahraný výkres, vždy s DŮVODEM (vykresy/_revize, bez pole uid → smí celý tým)
+function _invalidateDrawing(p, rebuildFn){
+  if(!window.currentUser){ showToast('Pro zneplatnění se přihlas', 3000); return; }
+  if(!p || !p.soubor) return;
+  var key = _revKey(p.soubor);
+  if(p._invalid){
+    if(!confirm('Obnovit výkres „'+(p.nazev||p.typ||'')+'" jako platný?')) return;
+    var bak = _vykRevize[key]; delete _vykRevize[key];   // optimisticky
+    db.ref('vykresy/_revize/'+key).remove()
+      .then(function(){ showToast('♻️ Obnoveno jako platné', 1800); })
+      .catch(function(){ if(bak) _vykRevize[key]=bak; showToast('❌ Nepodařilo se', 2800); if(rebuildFn) rebuildFn(); });
+  } else {
+    var duvod = prompt('Zneplatnit výkres „'+(p.nazev||p.typ||'')+'".\nUveď DŮVOD (zobrazí se u výkresu, výkres zůstane dohledatelný jako ⛔ neplatný):', '');
+    if(duvod===null) return;
+    var rec = { neplatny:true, soubor:p.soubor, nazev:(p.nazev||p.typ||''), duvod:(duvod||'').trim(),
+      by:(window.currentUser.name||''), byUid:(window.currentUser.uid||''), ts:Date.now() };
+    _vykRevize[key] = rec;   // optimisticky
+    db.ref('vykresy/_revize/'+key).set(rec)
+      .then(function(){ showToast('🗄️ Výkres zneplatněn', 1800); })
+      .catch(function(){ delete _vykRevize[key]; showToast('❌ Nepodařilo se (pravidla?)', 2800); if(rebuildFn) rebuildFn(); });
+  }
+  if(rebuildFn) rebuildFn();
+}
+// ── Bodové objekty (mosty, úseky…): stejný přepínač ──
+function _propIdxInView(){
+  var out=[];
+  for(var i=0;i<propPages.length;i++){ if(_docGroupOf(propPages[i])===window._propView) out.push(i); }
+  return out;
+}
+function renderPropSwitch(){
+  var sw=document.getElementById('prop-viewswitch'); if(!sw) return;
+  var cnt={PDPS:0,RDS:0,NEPLATNE:0};
+  propPages.forEach(function(p){ cnt[_docGroupOf(p)]++; });
+  var groups=[{k:'PDPS',lbl:'📘 PDPS'},{k:'RDS',lbl:'📗 RDS'}];
+  if(cnt.NEPLATNE>0) groups.push({k:'NEPLATNE',lbl:'⛔ Neplatné'});
+  sw.style.display='flex'; sw.innerHTML='';
+  groups.forEach(function(g){
+    var on=(window._propView===g.k);
+    var b=document.createElement('button');
+    b.textContent=g.lbl+' ('+cnt[g.k]+')';
+    b.style.cssText='flex:1;padding:7px 8px;font-size:12px;font-weight:700;cursor:pointer;border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none;'+
+      (on?'background:var(--accent);color:#fff;':'background:var(--panel);color:var(--text2);');
+    b.onclick=(function(k){return function(){ setPropView(k); };})(g.k);
+    sw.appendChild(b);
+  });
+}
+function renderPropTabs(){
+  var tabs=document.getElementById('prop-tabs'); if(!tabs) return;
+  tabs.innerHTML='';
+  _propIdxInView().forEach(function(idx){
+    var p=propPages[idx];
+    var btn=document.createElement('button');
+    btn.className='pdf-tab'+(idx===propPageIdx?' active':'');
+    btn.setAttribute('data-idx', idx);
+    btn.textContent=_docTabLabel(p);
+    btn.title=(p.nazev||p.typ||'')+(p._invalid?' (neplatný)':'');
+    btn.style.maxWidth='200px'; btn.style.overflow='hidden'; btn.style.textOverflow='ellipsis'; btn.style.whiteSpace='nowrap';
+    if(p._invalid){ btn.style.opacity='0.6'; btn.style.fontStyle='italic'; }
+    btn.onclick=(function(i){return function(){ renderPropPage(i); };})(idx);
+    tabs.appendChild(btn);
+  });
+}
+function setPropView(v){
+  window._propView=v;
+  var list=_propIdxInView();
+  if(list.length){ propPageIdx=list[0]; }
+  renderPropSwitch();
+  renderPropTabs();
+  renderPropPage(propPageIdx);
+}
+function rebuildPropPanel(){
+  var pp=document.getElementById('prop-panel'); if(!pp || !pp.classList.contains('open')) return;
+  var cur=propPages[propPageIdx], oldGroup=cur?_docGroupOf(cur):null;
+  _buildPropTabs();
+  // zneplatněný/obnovený výkres „následuj" do jeho nové skupiny (ať je vidět červený pruh s důvodem)
+  if(cur){ var ni=propPages.indexOf(cur), ng=_docGroupOf(cur); if(ni>=0 && ng!==oldGroup && window._propView===oldGroup){ window._propView=ng; propPageIdx=ni; renderPropSwitch(); renderPropTabs(); } }
+  renderPropPage(propPageIdx);
+}
+// ── ➕ Přidat výkres(y): víc PDF naráz (celý SO), drag&drop, volba RDS/PDPS ──
+function addVykresTrasa(){
+  if(!featGuard('vykresy')) return;
+  var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
+  if(!user) { showToast('Nejdřív se přihlas', 2200); return; }
+  _openVykUpSheet({ soKey:'trasa', label:'· hlavní trasa (ukáže se na všech staničeních)', prop:null });
+}
+function _openVykUpSheet(target){
+  window._vykUpTarget = target;
+  var sh = document.getElementById('vyk-up-sheet');
+  if(!sh){
+    sh = document.createElement('div'); sh.id = 'vyk-up-sheet';
+    sh.style.cssText = 'display:none;position:fixed;inset:0;z-index:6000;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:14px;';
+    sh.innerHTML = '<div style="background:var(--panel);border:1px solid var(--border);border-radius:14px;width:min(96vw,440px);max-height:90vh;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;">'+
+      '<div style="display:flex;align-items:center;gap:8px;"><div style="flex:1;font-weight:800;color:var(--accent2);font-size:15px;">➕ Přidat výkres(y) <span id="vyk-up-so" style="font-size:12px;color:var(--text2);font-weight:400;"></span></div>'+
+      '<button onclick="_closeVykUpSheet()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;min-width:44px;min-height:44px;">✕</button></div>'+
+      '<label style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px;">Dokumentace (blok)'+
+      '<select id="vyk-up-doktyp" style="padding:10px;font-size:15px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);"><option value="RDS" selected>📗 RDS – realizační dokumentace</option><option value="PDPS">📘 PDPS – projekt</option></select></label>'+
+      '<label style="font-size:12px;color:var(--text2);display:flex;flex-direction:column;gap:4px;">Název (jen u 1 souboru – jinak se vezme z názvu souboru)'+
+      '<input id="vyk-up-nazev" type="text" maxlength="80" placeholder="nepovinné" style="padding:10px;font-size:15px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:var(--text);"></label>'+
+      '<div id="vyk-up-drop" style="border:2px dashed var(--border);border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;background:var(--panel2);font-size:13px;color:var(--text2);">📥 Přetáhni sem PDF nebo <b style="color:var(--accent2);">klikni pro výběr</b><br><span style="font-size:11px;opacity:.75;">(lze i více výkresů najednou – celý SO)</span>'+
+      '<div id="vyk-up-count" style="font-size:11px;color:var(--accent2);margin-top:6px;word-break:break-word;"></div>'+
+      '<input id="vyk-up-file" type="file" accept="application/pdf,.pdf" multiple style="display:none;"></div>'+
+      '<div id="vyk-up-status" style="font-size:12px;color:var(--text2);min-height:16px;"></div>'+
+      '<button id="vyk-up-go" onclick="_vykUpGo()" style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px;">Nahrát</button>'+
+    '</div>';
+    document.body.appendChild(sh);
+  }
+  var lbl = document.getElementById('vyk-up-so'); if(lbl) lbl.textContent = target.label || '';
+  document.getElementById('vyk-up-nazev').value = '';
+  document.getElementById('vyk-up-file').value = '';
+  document.getElementById('vyk-up-count').textContent = '';
+  document.getElementById('vyk-up-status').textContent = '';
+  _setupPdfDrop('vyk-up-drop','vyk-up-file','vyk-up-count');
+  sh.style.display = 'flex';
+}
+function _closeVykUpSheet(){ var sh=document.getElementById('vyk-up-sheet'); if(sh) sh.style.display='none'; }
+function _vykUpGo(){
+  var t = window._vykUpTarget; if(!t || !t.soKey){ showToast('Chybí objekt pro výkres', 2500); return; }
+  var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
+  if(!user){ showToast('Nejdřív se přihlas', 2200); return; }
+  if(!storage){ showToast('❌ Storage nedostupné', 3000); return; }
+  var fi = document.getElementById('vyk-up-file'), st = document.getElementById('vyk-up-status');
+  var col = _collectPdfFiles(fi.files);
+  if(!col.ok.length){ st.textContent = col.err.length ? ('⚠️ '+col.err.map(function(e){return e.name+' ('+e.why+')';}).join(', ')) : '⚠️ Vyber PDF soubor(y)'; return; }
+  var dokTyp = document.getElementById('vyk-up-doktyp').value || 'RDS';
+  var nazevIn = (document.getElementById('vyk-up-nazev').value || '').trim();
+  var files = col.ok, total = files.length, done = 0, fail = 0;
+  var btn = document.getElementById('vyk-up-go'); btn.disabled = true; btn.style.opacity = '.6';
+  trackEvent('vykresy');
+  st.textContent = '⏳ Nahrávám 0/'+total+'…';
+  (function next(i){
+    if(i >= total){
+      btn.disabled = false; btn.style.opacity = '1';
+      st.textContent = (fail ? ('⚠️ Nahráno '+done+' z '+total+' ('+fail+' selhalo)') : ('✅ Hotovo – nahráno '+done))+(col.err.length?(' · přeskočeno: '+col.err.map(function(e){return e.name;}).join(', ')):'');
+      showToast(fail ? ('Nahráno '+done+'/'+total) : (done>1 ? ('✅ Nahráno '+done+' výkresů') : '✅ Výkres přidán'), 2200);
+      if(done && typeof logActivity==='function') logActivity('📐', 'nahrál/a '+(done>1?(done+' výkresů'):'výkres')+' ('+dokTyp+(t.prop?(', '+(t.prop.nazev||t.prop.id)):', hlavní trasa')+')');
+      fi.value = ''; var c = document.getElementById('vyk-up-count'); if(c) c.textContent = '';
+      if(done){
+        if(t.prop){ if(window._currentProp && window._currentProp.id === t.prop.id){ window._propViewAfterLoad = dokTyp; loadUploadedVykresy(t.prop); } }
+        else { var dp=document.getElementById('pdf-panel'); if(dp && dp.classList.contains('open') && window._docSwitchMode) setDocView(dokTyp); }
+      }
+      if(!fail) setTimeout(_closeVykUpSheet, 900);
+      return;
+    }
+    var f = files[i], nazev = ((total===1 && nazevIn) ? nazevIn : f.name.replace(/\.pdf$/i,'')).slice(0,80);
+    var path = 'pdf/uploads/' + t.soKey + '/' + Date.now() + '_' + i + '_' + _safePdfName(f.name) + '.pdf';   // → Firebase Storage
+    _uploadPdfFile(f, path).then(function(){
+      return db.ref('vykresy/' + t.soKey).push({ nazev:nazev, soubor:path, dokTyp:dokTyp,
+        uid:user.uid, author:(window.currentUser ? window.currentUser.name : ''),
+        time:new Date().toLocaleString('cs-CZ'), ts:Date.now() });
+    }).then(function(){ done++; st.textContent = '⏳ Nahrávám '+done+'/'+total+'…'; next(i+1); })
+      .catch(function(e){ console.error('vyk upload:', e); fail++; next(i+1); });
+  })(0);
+}
+
 
 function docGoTo(idx) {
   docPageIdx = idx;
@@ -6745,6 +7088,7 @@ function openPropPanel(prop) {
   // Aktualizuj globální currentPropSrc pro tlačítko 'Otevřít externě'
   currentPropSrc = propPages[0].soubor;
   propPageIdx = 0;
+  window._propView = 'PDPS';   // statické výkresy objektu = PDPS
 
   var panel = document.getElementById('prop-panel');
   var title = document.getElementById('prop-title');
@@ -6770,29 +7114,18 @@ function openPropPanel(prop) {
 // Sestaví záložky z aktuálního pole propPages. Neplatné (zneplatněné) výkresy
 // se přeřadí na KONEC a vykreslí šedě/kurzívou jako „⛔" – pořád otevřitelné.
 function _buildPropTabs() {
-  var tabs = document.getElementById('prop-tabs');
-  if(!tabs) return;
-  // označ neplatné a stabilně přeřaď: platné napřed, neplatné na konec
-  propPages.forEach(function(p){ p._invalid = jeNeplatnyVykres(p.soubor); });
+  // Neplatné na konec (vykresy/_revize), pak přepínač PDPS/RDS/⛔ a záložky aktuálního pohledu.
+  // Vrací true, když se kvůli prázdné skupině přepnul pohled (volající pak překreslí stránku).
   var cur = propPages[propPageIdx];
-  var valid = propPages.filter(function(p){ return !p._invalid; });
-  var invalid = propPages.filter(function(p){ return p._invalid; });
-  propPages = valid.concat(invalid);
+  propPages = finalizeDocPages(propPages);
   var ni = propPages.indexOf(cur);
   propPageIdx = (ni >= 0) ? ni : 0;
-  tabs.innerHTML = '';
-  propPages.forEach(function(p, i) {
-    var btn = document.createElement('button');
-    btn.className = 'pdf-tab' + (i===propPageIdx?' active':'');
-    if(p._invalid){
-      btn.textContent = '⛔ ' + (p.typ || 'Výkres');
-      btn.style.opacity = '.55'; btn.style.fontStyle = 'italic';
-    } else {
-      btn.textContent = (p._uploaded ? '🆕 ' : '') + (p.typ || 'Výkres');
-    }
-    btn.onclick = (function(idx){ return function(){ renderPropPage(idx); }; })(i);
-    tabs.appendChild(btn);
-  });
+  var changed = false;
+  if(['PDPS','RDS','NEPLATNE'].indexOf(window._propView) < 0) window._propView = 'PDPS';
+  if(!_propIdxInView().length && propPages.length){ var g=_docGroupOf(propPages[0]); if(g!==window._propView){ window._propView=g; changed=true; } }
+  renderPropSwitch();
+  renderPropTabs();
+  return changed;
 }
 
 // ── Verzování / zneplatňování výkresů ────────────────────────────────
@@ -6810,25 +7143,16 @@ function _loadVykRevize(){
     Object.keys(v).forEach(function(k){ if(v[k] && v[k].neplatny) _vykRevize[k] = v[k]; });
     var pp = document.getElementById('prop-panel');
     if(pp && pp.classList.contains('open')){ _buildPropTabs(); renderPropPage(propPageIdx); }
+    if(typeof rebuildDocPanel==='function') rebuildDocPanel();
   });
 }
 function invalidateCurrentDoc(){
-  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
-  var p = propPages[propPageIdx]; if(!p || !p.soubor) return;
-  if(!confirm('Označit výkres „' + (p.nazev || p.typ || '') + '" jako NEPLATNÝ (nahrazený)?\nZůstane dohledatelný jako šedá záložka na konci.')) return;
-  db.ref('vykresy/_revize/' + _revKey(p.soubor)).set({
-    neplatny: true, soubor: p.soubor,
-    by: (window.currentUser.name || ''), byUid: (window.currentUser.uid || ''),
-    ts: Date.now()
-  }).then(function(){ showToast('🗄️ Označeno jako neplatné', 1800); })
-    .catch(function(){ showToast('❌ Nepodařilo se (pravidla?)', 2800); });
+  if(!propPages || !propPages.length) return;
+  _invalidateDrawing(propPages[propPageIdx], rebuildPropPanel);   // s DŮVODEM
 }
 function restoreCurrentDoc(){
-  if(!window.currentUser){ showToast('Nejdřív se přihlas', 2000); return; }
-  var p = propPages[propPageIdx]; if(!p || !p.soubor) return;
-  db.ref('vykresy/_revize/' + _revKey(p.soubor)).remove()
-    .then(function(){ showToast('♻️ Obnoveno jako platné', 1800); })
-    .catch(function(){ showToast('❌ Nepodařilo se', 2800); });
+  if(!propPages || !propPages.length) return;
+  _invalidateDrawing(propPages[propPageIdx], rebuildPropPanel);
 }
 
 // Klíč složky/uzlu pro daný SO objekt (např. "SO 124.1" → "SO_124.1")
@@ -6850,6 +7174,7 @@ function loadUploadedVykresy(prop) {
       var v = ch.val(); if(!v || !v.soubor) return;
       propPages.push({
         typ: v.nazev || 'Nahraný výkres',
+        dokTyp: (v.dokTyp==='PDPS' ? 'PDPS' : 'RDS'),   // starší nahrané bez typu = RDS
         nazev: v.nazev || 'Nahraný výkres',
         soubor: v.soubor,
         _uploaded: true,
@@ -6859,20 +7184,64 @@ function loadUploadedVykresy(prop) {
         author: v.author || ''
       });
     });
-    _buildPropTabs();
+    var chg = _buildPropTabs();
+    if(window._propViewAfterLoad){ var pv = window._propViewAfterLoad; window._propViewAfterLoad = null; setPropView(pv); }
+    else if(chg) renderPropPage(propPageIdx);
   }).catch(function(e){ console.warn('loadUploadedVykresy:', e); });
 }
 
 function renderPropPage(idx) {
+  var frameEl  = document.getElementById('prop-iframe');
+  var title    = document.getElementById('prop-title');
+  var openWrap = document.getElementById('prop-open-wrap');
+  var invBar   = document.getElementById('prop-invalid-bar');
+  var delBtn   = document.getElementById('btn-prop-del-vykres');
+  var invBtn   = document.getElementById('btn-prop-invalidate');
+  var resBtn   = document.getElementById('btn-prop-restore');
+  var emptyEl  = document.getElementById('prop-empty');
+  if(!emptyEl){
+    emptyEl = document.createElement('div'); emptyEl.id = 'prop-empty';
+    emptyEl.style.cssText = 'display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:20px;text-align:center;color:var(--text2);font-size:14px;';
+    var pc0 = document.getElementById('prop-content'); if(pc0) pc0.insertBefore(emptyEl, pc0.firstChild);
+  }
+  var logged = !!window.currentUser;
+  // Zvolená skupina (PDPS/RDS/Neplatné) prázdná → hláška místo cizího PDF
+  var vlist = _propIdxInView();
+  if(vlist.length===0){
+    if(frameEl){ frameEl.src = 'about:blank'; frameEl.style.display = 'none'; }
+    var cw = document.getElementById('prop-canvas-wrap'); if(cw) cw.style.display = 'none';
+    if(openWrap) openWrap.style.display = 'none';
+    if(invBar) invBar.style.display = 'none';
+    var lbl = (window._propView==='RDS') ? 'RDS výkresy' : (window._propView==='NEPLATNE' ? 'neplatné výkresy' : 'PDPS výkresy');
+    emptyEl.innerHTML = '<div style="font-size:30px;">📄</div><div>U tohoto objektu zatím nejsou žádné '+lbl+'.'+(window._propView==='RDS'?'<br><span style="font-size:12px;opacity:.8;">Nahraj je přes ➕📄 nahoře (i více PDF naráz).</span>':'')+'</div>';
+    emptyEl.style.display = 'flex';
+    if(title) title.textContent = (window._propView==='RDS'?'📗 RDS':(window._propView==='NEPLATNE'?'⛔ Neplatné':'📘 PDPS'));
+    document.querySelectorAll('#prop-tabs .pdf-tab').forEach(function(b){ b.classList.remove('active'); });
+    if(delBtn) delBtn.style.display = 'none';
+    if(invBtn) invBtn.style.display = 'none';
+    if(resBtn) resBtn.style.display = 'none';
+    currentPropSrc = '';
+    return;
+  }
+  if(vlist.indexOf(idx)===-1) idx = vlist[0];
+  emptyEl.style.display = 'none';
   propPageIdx = idx;
   var p = propPages[idx];
   currentPropSrc = p.soubor;
-  document.querySelectorAll('#prop-tabs .pdf-tab').forEach(function(b,i){ b.classList.toggle('active',i===idx); });
-  var openWrap = document.getElementById('prop-open-wrap');
-  var frameEl  = document.getElementById('prop-iframe');
+  document.querySelectorAll('#prop-tabs .pdf-tab').forEach(function(b){ b.classList.toggle('active', parseInt(b.getAttribute('data-idx'),10)===idx); });
   // Aktualizuj titulek a label
-  var title = document.getElementById('prop-title');
   if(title) title.textContent = p.nazev || p.typ || 'Propustek';
+  // Červený pruh s důvodem u zneplatněného výkresu
+  if(p._invalid){
+    if(!invBar){
+      invBar = document.createElement('div'); invBar.id = 'prop-invalid-bar';
+      invBar.style.cssText = 'background:#c0392b;color:#fff;font-size:12px;line-height:1.4;padding:7px 10px;flex-shrink:0;';
+      var pc = document.getElementById('prop-content'); pc.parentNode.insertBefore(invBar, pc);
+    }
+    var det = []; if(p._by) det.push('zneplatnil '+escapeHtml(p._by)); if(p._ts) det.push(new Date(p._ts).toLocaleDateString('cs-CZ'));
+    invBar.innerHTML = '⛔ <b>NEPLATNÝ VÝKRES</b>'+(p._duvod?(' — '+escapeHtml(p._duvod)):'')+(det.length?('<div style="opacity:.85;margin-top:2px;">'+det.join(' · ')+'</div>'):'');
+    invBar.style.display = 'block';
+  } else if(invBar){ invBar.style.display = 'none'; }
   // VŽDY iframe (jako Votice). Pro pinch-zoom otevři v Safari přes ↗.
   var canvasWrap = document.getElementById('prop-canvas-wrap');
   var propZoomIn  = document.getElementById('btn-prop-zoom-in');
@@ -6885,8 +7254,8 @@ function renderPropPage(idx) {
     if(frameEl) { frameEl.src = 'about:blank'; frameEl.style.display = 'none'; }
     if(openWrap) {
       openWrap.style.display = 'flex';
-      var lbl = document.getElementById('prop-open-label');
-      if(lbl) lbl.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
+      var lbl2 = document.getElementById('prop-open-label');
+      if(lbl2) lbl2.innerHTML = '📐 <b>Velký detailní výkres</b><br>' + escapeHtml(p.nazev || p.typ || '') +
         '<br><span style="font-size:11px;">Vestavěný náhled by na telefonu spadl – otevři ho v prohlížeči.</span>' +
         '<br><a onclick="propForceIframe()" style="color:var(--accent2);cursor:pointer;text-decoration:underline;font-size:12px;">přesto zkusit zobrazit zde</a>';
     }
@@ -6895,12 +7264,8 @@ function renderPropPage(idx) {
     if(frameEl)  { frameEl.style.display = 'flex'; setPdfFrameAsync(frameEl, p.soubor); }
   }
   // Koš jen u nahraného výkresu, který patří přihlášenému uživateli
-  var delBtn = document.getElementById('btn-prop-del-vykres');
   if(delBtn) delBtn.style.display = (p._uploaded && isOwner(p, 'uid')) ? '' : 'none';
   // Zneplatnit / obnovit – pro libovolný výkres (statický i nahraný), jen přihlášený
-  var logged = !!window.currentUser;
-  var invBtn = document.getElementById('btn-prop-invalidate');
-  var resBtn = document.getElementById('btn-prop-restore');
   if(invBtn) invBtn.style.display = (logged && !p._invalid) ? '' : 'none';
   if(resBtn) resBtn.style.display = (logged && p._invalid) ? '' : 'none';
 }
@@ -6921,24 +7286,7 @@ function addVykresForCurrentSO() {
   if(!prop) { showToast('Nejdřív otevři objekt', 2000); return; }
   var user = (typeof fbAuth !== 'undefined' && fbAuth) ? fbAuth.currentUser : null;
   if(!user) { showToast('Nejdřív se přihlas', 2200); return; }
-  var inp = document.getElementById('vykres-file-input');
-  if(!inp) return;
-  inp.value = '';
-  inp.onchange = function(e) {
-    var file = e.target.files && e.target.files[0];
-    inp.value = '';
-    if(!file) return;
-    var nm = (file.name || '').toLowerCase();
-    if(nm.slice(-4) !== '.pdf') { showToast('Vyber soubor PDF', 2500); return; }
-    if(file.size > 30 * 1024 * 1024) {
-      showToast('❌ PDF je moc velké (max 30 MB). Zmenši ho nebo rozděl.', 4000); return;
-    }
-    var nazev = prompt('Název výkresu (jak se zobrazí):', file.name.replace(/\.pdf$/i, ''));
-    if(nazev === null) return;
-    nazev = (nazev || '').trim() || file.name.replace(/\.pdf$/i, '');
-    _doUploadVykres(prop, file, nazev);
-  };
-  inp.click();
+  _openVykUpSheet({ soKey: soFolderKey(prop.id), label: '· '+(prop.nazev || prop.id), prop: prop });   // i více PDF naráz
 }
 
 function _doUploadVykres(prop, file, nazev) {
@@ -9141,12 +9489,13 @@ function _renderStats(){
    ════════════════════════════════════════════════════════════════ */
 window.allDokumenty = {};
 window.dokFilterCat = '';
-var DOK_KATEGORIE = ['KZP','TePř','Protokol','Ostatní'];
+var DOK_KATEGORIE = ['Protokol','Ostatní'];   // TePř/KZP jsou v 🧪 Kvalita/KZP
 function loadDokumenty(){
   if(typeof db === 'undefined') return;
   db.ref('dokumenty').on('value', function(snap){
     window.allDokumenty = snap.val() || {};
     if(document.getElementById('dokumenty-modal') && document.getElementById('dokumenty-modal').classList.contains('open')) renderDokList();
+    var kp=document.getElementById('kzp-panel'); if(kp && kp.classList.contains('open') && typeof refreshKzpAll==='function') refreshKzpAll();
   });
 }
 function openDokumenty(){
@@ -9155,6 +9504,7 @@ function openDokumenty(){
   _fillDokSoList();
   window.dokFilterCat = '';
   renderDokFilter(); renderDokList();
+  _setupDokDrop();
   document.getElementById('dokumenty-modal').classList.add('open');
 }
 function closeDokumenty(){ document.getElementById('dokumenty-modal').classList.remove('open'); }
@@ -9172,6 +9522,7 @@ function renderDokFilter(){
 function renderDokList(){
   var box = document.getElementById('dok-list'); if(!box) return;
   var arr = Object.keys(window.allDokumenty).map(function(id){ var d=window.allDokumenty[id]; d._id=id; return d; });
+  arr = arr.filter(function(d){ var kn=_dokKatNorm(d.kat); return kn!=='kzp' && kn!=='tepr'; });   // TePř/KZP jsou v 🧪 Kvalita/KZP
   if(window.dokFilterCat) arr = arr.filter(function(d){ return d.kat===window.dokFilterCat; });
   arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
   if(!arr.length){ box.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:14px;text-align:center;">Žádné dokumenty'+(window.dokFilterCat?' v kategorii '+window.dokFilterCat:'')+'.</div>'; return; }
@@ -9187,34 +9538,10 @@ function renderDokList(){
   }).join('');
 }
 function uploadDokument(input){
-  var file = input.files && input.files[0];
+  var files = Array.prototype.slice.call((input && input.files) || []);
   input.value = '';
-  if(!file) return;
-  if((file.name||'').toLowerCase().slice(-4)!=='.pdf'){ showToast('Vyber soubor PDF', 2500); return; }
-  if(file.size > 30*1024*1024){ showToast('❌ PDF je moc velké (max 30 MB).', 4000); return; }
-  if(!storage){ showToast('❌ Storage nedostupné', 3000); return; }
-  var kat = document.getElementById('dok-up-kat').value || 'Ostatní';
-  var so = (document.getElementById('dok-up-so').value || '').trim();
-  var nazev = prompt('Název dokumentu (jak se zobrazí):', file.name.replace(/\.pdf$/i,''));
-  if(nazev===null) return;
-  nazev = (nazev||'').trim() || file.name.replace(/\.pdf$/i,'');
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var base64 = String(ev.target.result||'').replace(/^data:[^;]+;base64,/,'');
-    if(!base64){ showToast('❌ Nepodařilo se načíst soubor', 3000); return; }
-    var ts = Date.now();
-    var safe = nazev.replace(/[^A-Za-z0-9._-]+/g,'_').replace(/_+/g,'_').slice(0,60) || 'dokument';
-    var path = 'pdf/uploads/dokumenty/' + kat.replace(/[^A-Za-z0-9]+/g,'_') + '/' + ts + '_' + safe + '.pdf';
-    showSync('⏳ Nahrávám dokument…');
-    storage.ref(path).putString(base64,'base64',{contentType:'application/pdf'})
-      .then(function(){
-        return db.ref('dokumenty').push({ kat:kat, nazev:nazev, so:so, soubor:path,
-          uid:(window.currentUser?window.currentUser.uid:null), author:(window.currentUser?window.currentUser.name:''), ts:ts });
-      })
-      .then(function(){ hideSync(); showToast('✅ Dokument nahrán', 2500); })
-      .catch(function(e){ hideSync(); console.error('uploadDokument:', e); showToast('❌ Nahrání selhalo (pravidla?)', 4000); });
-  };
-  reader.readAsDataURL(file);
+  if(!files.length) return;
+  _dokUploadFiles(files);   // i více souborů naráz
 }
 function openDokument(id){
   var d = window.allDokumenty[id]; if(!d || !d.soubor) return;
@@ -10519,13 +10846,26 @@ function downloadReportPhotos(){
 /* ═══ MĚSÍČNÍ ZÁLOHA FOTEK ═══
    Vybere všechny fotky novější než poslední záloha (localStorage 'lastPhotoBackupTs'),
    uživatel je stáhne (ZIP/Mobil) a potvrdí „✓ Záloha hotová" → posune značku. */
-function _lastBackupTs(){ try{ return +(localStorage.getItem('lastPhotoBackupTs')||0); }catch(e){ return 0; } }
-function _setLastBackupTs(t){ try{ localStorage.setItem('lastPhotoBackupTs', String(t)); }catch(e){} _renderBackupInfo(); }
+function _lastBackupTs(){ try{ return +(localStorage.getItem(_backupKey())||0); }catch(e){ return 0; } }
+
+function _appScope(){
+  try{ if(window.FIREBASE_CONFIG && FIREBASE_CONFIG.projectId) return FIREBASE_CONFIG.projectId; }catch(e){}
+  try{ var seg=(location.pathname.split('/').filter(Boolean)[0])||''; if(seg && seg.indexOf('.')===-1) return seg; }catch(e){}
+  return 'app';
+}
+
+function _backupKey(){ return 'lastPhotoBackupTs::'+_appScope(); }
+
+function _setLastBackupTs(t){ try{ localStorage.setItem(_backupKey(), String(t)); }catch(e){} _renderBackupInfo(); }
 function _renderBackupInfo(){
+  // Zálohu vidí/dělá jen správce (admin) – a je per aplikace (viz _appScope).
+  var sec=document.getElementById('backup-section');
+  if(sec) sec.style.display = (typeof isAdmin==='function' && isAdmin()) ? 'block' : 'none';
   var el=document.getElementById('backup-info'); if(!el) return; var t=_lastBackupTs();
   el.textContent = t ? ('Poslední záloha: '+new Date(t).toLocaleDateString('cs-CZ')+' '+new Date(t).toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'})) : 'Zatím nezálohováno – vybere všechny fotky.';
 }
 function selectPhotosSinceBackup(){
+  if(typeof isAdmin==='function' && !isAdmin()){ showToast('Zálohu fotek dělá jen správce', 2800); return; }
   if(typeof galleryTab!=='undefined' && galleryTab!==0){ showToast('Přepni na „Fotky stavby"',2600); return; }
   var cutoff=_lastBackupTs();
   db.ref('standalone_photos').orderByChild('ts').once('value', function(snap){
@@ -10541,9 +10881,12 @@ function selectPhotosSinceBackup(){
   });
 }
 function markBackupDone(){
+  if(typeof isAdmin==='function' && !isAdmin()){ showToast('Zálohu může označit jen správce', 2800); return; }
+  // Dvojí potvrzení – ať se omylem neposune značka a nepřijdeš o fotky ze zálohy
+  if(!confirm('Opravdu je záloha fotek HOTOVÁ?\n\nPotvrď jen když jsi fotky (ZIP) skutečně stáhl a uložil bokem.\nPříště se pak nabídnou jen fotky novější než teď.')) return;
   var t=window._backupNewestTs || Date.now();
   _setLastBackupTs(t);
-  showToast('✅ Záloha označena k '+new Date(t).toLocaleDateString('cs-CZ')+'. Příště se vyberou jen novější.',4500);
+  showToast('✅ Záloha označena k '+new Date(t).toLocaleDateString('cs-CZ')+' '+new Date(t).toLocaleTimeString('cs-CZ',{hour:'2-digit',minute:'2-digit'})+'. Příště se vyberou jen novější.',4800);
   gallerySelectedKeys={}; renderGallery();
 }
 
@@ -14205,9 +14548,11 @@ function openKzpPanel(){
   if(!window.currentUser) { showToast('Nejdřív se přihlas', 2000); return; }
   if(!featGuard('kvalita')) return;
   document.getElementById('kzp-panel').classList.add('open');
+  var ub=document.getElementById('kzp-upload-box'); if(ub) ub.style.display='none';
   loadKzpSeed();
   loadTeprSeed();
   loadKzpManual();
+  if(typeof refreshKzpAll==='function') refreshKzpAll();
 }
 function closeKzpPanel(){
   if(window._kzpPdfOpen) closeKzpPdfInline();
@@ -14230,8 +14575,20 @@ function refreshKzpAll(){
       if(k && k.nazev) combined[id] = k;
     });
   }
+  // Dokumenty nahrané přes 📥 (window.allDokumenty) – TePř/KZP se propíšou do Zkumavky
+  if(window.allDokumenty){
+    Object.keys(window.allDokumenty).forEach(function(key){
+      var d=window.allDokumenty[key]; if(!d || !d.soubor) return;
+      var kn=_dokKatNorm(d.kat); if(kn!=='kzp' && kn!=='tepr') return;
+      var id='dok_'+key;
+      combined[id]={ id:id, nazev:(d.nazev||'Dokument'), so:(d.so||''), technologickaCast:'', typ:kn,
+        stav:(d.stav==='koncept'?'koncept':'cistopis'), verze:(d.stav==='koncept'?'koncept':'čistopis'),
+        schvaleno:(d.stav!=='koncept'), pdfUrl:d.soubor, ts:d.ts, author:d.author, _dokKey:key };
+    });
+  }
   window.allKzp = combined;
   rebuildKzpFilters();
+  renderKzpStavSwitch();
   renderKzpList();
 }
 
@@ -14853,7 +15210,7 @@ async function downloadTeprWithSigs(){
 
   try {
     showSync('⏳ Stahuji originál…');
-    var r = await fetch(k.pdfUrl);
+    var r = await fetch(await resolveFileUrl(k.pdfUrl));   // Storage cesta (nahrané TePř) → token URL
     if(!r.ok) throw new Error('PDF nenalezeno: ' + k.pdfUrl);
     var bytes = await r.arrayBuffer();
 
@@ -15157,6 +15514,7 @@ function renderKzpList(){
   var textFilt = (document.getElementById('kzp-filter-text').value || '').trim().toLowerCase();
   var items = Object.keys(window.allKzp).map(function(id){ var v = window.allKzp[id]; v._id = id; return v; });
   items = items.filter(function(k){
+    if(window._kzpStav && (k.stav || 'cistopis') !== window._kzpStav) return false;   // Koncept / Čistopis
     if(typFilt && (k.typ || 'kzp') !== typFilt) return false;
     if(soFilt && k.so !== soFilt) return false;
     if(tcFilt && (k.technologickaCast || '') !== tcFilt) return false;
@@ -15173,23 +15531,206 @@ function renderKzpList(){
     return (a.technologickaCast || '').localeCompare(b.technologickaCast || '', 'cs');
   });
   if(items.length === 0) {
-    box.innerHTML = '<div id="kzp-empty">Žádné PDF k zobrazení. Klepni <b>📥 Import KZP</b> nahoře pro nahrání z PDF souborů, nebo <b>+ Položka</b> pro ruční zápis.</div>';
+    box.innerHTML = '<div id="kzp-empty" style="text-align:center;color:var(--text2);padding:22px;font-size:13px;">Žádné TePř/KZP'+(window._kzpStav?(' ve stavu '+(window._kzpStav==='koncept'?'📝 Koncept':'✅ Čistopis')):'')+'. Nahoře dej <b>📥 Nahrát</b> a vyber PDF (i více naráz).</div>';
     return;
   }
   box.innerHTML = items.map(function(k){
     var typIcon = (k.typ === 'tepr') ? '📋' : '🧪';
-    var nameMid = (k.typ === 'tepr' && k.nazev) ? k.nazev : (k.technologickaCast || '');
-    var title = (k.so || '–') + (nameMid ? ' - ' + nameMid : '');
-    var schvalenoIcon = (k.schvaleno === false) ? '<span title="Neschváleno" style="color:#ff6b6b;">⚠️</span>' : (k.schvaleno === true ? '<span title="Schváleno" style="color:#48bb78;">✓</span>' : '');
-    var verz = k.verze ? '<span style="color:var(--text2);font-size:11px;margin-left:6px;">' + escapeHtml(k.verze) + '</span>' : '';
-    var actBtn = '<button onclick="event.stopPropagation();openKzpEditModal(\'' + k._id + '\')" title="Upravit" style="background:transparent;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:2px 6px;">✏️</button>';
-    return '<div class="kzp-card" onclick="openKzpItem(\'' + k._id + '\')" style="display:flex;align-items:center;gap:8px;">'
-      + '<div style="flex:1;font-size:15px;font-weight:700;color:var(--text);">' + typIcon + ' ' + escapeHtml(title) + verz + '</div>'
-      + schvalenoIcon
-      + actBtn
+    var typTxt  = (k.typ === 'tepr') ? 'TePř' : 'KZP';
+    var nameMid = (k.typ === 'tepr' && k.nazev) ? k.nazev : (k.nazev || k.technologickaCast || '');
+    var title = (k.so ? (k.so+' – ') : '') + (nameMid || '–');
+    var isKoncept = (k.stav||'cistopis')==='koncept';
+    var stavBadge = '<span style="background:'+(isKoncept?'#f5a623':'#48bb78')+';color:#0f3460;font-size:10px;font-weight:800;border-radius:5px;padding:1px 6px;white-space:nowrap;">'+(isKoncept?'📝 KONCEPT':'✅ ČISTOPIS')+'</span>';
+    var kindBadge = '<span style="background:var(--panel2);color:var(--text2);font-size:10px;font-weight:700;border-radius:5px;padding:1px 6px;border:1px solid var(--border);">'+typIcon+' '+typTxt+'</span>';
+    // Nahraný dokument (/dokumenty): přepnout stav (koncept↔čistopis) + smazat; staré seed/URL → edit
+    var stavToggle = k._dokKey
+      ? '<button onclick="event.stopPropagation();setKzpDocStav(\''+k._dokKey+'\',\''+(isKoncept?'cistopis':'koncept')+'\')" title="'+(isKoncept?'Označit jako čistopis (schváleno)':'Vrátit na koncept')+'" style="background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;padding:3px 7px;white-space:nowrap;">'+(isKoncept?'→ ✅ Čistopis':'→ 📝 Koncept')+'</button>'
+      : '';
+    var actBtn = k._dokKey
+      ? '<button onclick="event.stopPropagation();deleteKzpDoc(\''+k._dokKey+'\')" title="Smazat dokument" style="background:transparent;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:2px 6px;">🗑</button>'
+      : '<button onclick="event.stopPropagation();openKzpEditModal(\'' + k._id + '\')" title="Upravit" style="background:transparent;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:2px 6px;">✏️</button>';
+    return '<div class="kzp-card" onclick="openKzpItem(\'' + k._id + '\')" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      + '<div style="flex:1;min-width:140px;font-size:15px;font-weight:700;color:var(--text);">' + escapeHtml(title) + '</div>'
+      + kindBadge + stavBadge
+      + stavToggle + actBtn
       + '</div>';
   }).join('');
 }
+
+function _safePdfName(name){
+  return String(name||'').replace(/\.pdf$/i,'')
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^A-Za-z0-9._-]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60) || 'soubor';
+}
+
+function _uploadPdfFile(file, storagePath){
+  return new Promise(function(resolve, reject){
+    var r = new FileReader();
+    r.onload = function(){
+      var b64 = String(r.result).replace(/^data:[^;]+;base64,/, '');
+      _privStorage().ref(storagePath).putString(b64, 'base64', { contentType:'application/pdf' })
+        .then(function(){ try{ delete _fileUrlCache[storagePath]; }catch(e){} resolve(storagePath); })
+        .catch(reject);
+    };
+    r.onerror = function(){ reject(new Error('Soubor se nepodařilo přečíst')); };
+    r.readAsDataURL(file);
+  });
+}
+
+function _collectPdfFiles(fileList){
+  var ok=[], err=[];
+  Array.prototype.slice.call(fileList||[]).forEach(function(f){
+    if(!/\.pdf$/i.test(f.name)) err.push({name:f.name, why:'není PDF'});
+    else if(f.size > 30*1024*1024) err.push({name:f.name, why:'> 30 MB'});
+    else ok.push(f);
+  });
+  return {ok:ok, err:err};
+}
+
+function _setupPdfDrop(dropId, inputId, countId){
+  var zone=document.getElementById(dropId), input=document.getElementById(inputId);
+  if(!zone || !input || zone.dataset.bound) return;
+  zone.dataset.bound='1';
+  function refreshCount(){
+    var c=document.getElementById(countId); if(!c) return;
+    var n=input.files?input.files.length:0;
+    c.textContent = n ? ('✅ vybráno souborů: '+n+(n>1?'':'')+' — '+Array.prototype.slice.call(input.files).map(function(f){return f.name;}).slice(0,3).join(', ')+(n>3?' …':'')) : '';
+  }
+  zone.addEventListener('click', function(e){ if(e.target!==input) input.click(); });
+  input.addEventListener('change', refreshCount);
+  ['dragenter','dragover'].forEach(function(ev){ zone.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); zone.style.borderColor='var(--accent2)'; zone.style.background='rgba(255,255,255,0.05)'; }); });
+  ['dragleave','dragend'].forEach(function(ev){ zone.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); zone.style.borderColor=''; zone.style.background=''; }); });
+  zone.addEventListener('drop', function(e){
+    e.preventDefault(); e.stopPropagation(); zone.style.borderColor=''; zone.style.background='';
+    var dt=e.dataTransfer; if(!dt || !dt.files || !dt.files.length) return;
+    try { input.files = dt.files; } catch(_){ }
+    refreshCount();
+  });
+}
+
+function setKzpStav(v){ window._kzpStav = v; renderKzpStavSwitch(); renderKzpList(); }
+
+function _detectDokKat(name){
+  var s = String(name||'').toLowerCase();
+  if(/\bkzp\b|kontroln.*zku/.test(s)) return 'kzp';
+  if(/tep[řr]|technologick.*p[řr]edpis/.test(s)) return 'tepr';
+  return null;
+}
+
+function toggleKzpUpload(){
+  if(!window.currentUser){ showToast('Pro nahrání se přihlas (úkolníček → přihlášení)', 3500); return; }
+  if(!hasPerm('dokumenty') && !hasPerm('kvalita')){ showToast('Nahrávání Ti admin nepovolil', 3000); return; }
+  var box=document.getElementById('kzp-upload-box'); if(!box) return;
+  var show = (box.style.display==='none' || !box.style.display);
+  box.style.display = show ? 'block' : 'none';
+  if(show){ _setupPdfDrop('kzpup-drop','kzpup-file','kzpup-count'); var st=document.getElementById('kzpup-status'); if(st) st.textContent=''; }
+}
+
+window._kzpStav='';
+function renderKzpStavSwitch(){
+  var sw = document.getElementById('kzp-stav-switch'); if(!sw) return;
+  var cnt = {all:0, koncept:0, cistopis:0};
+  Object.keys(window.allKzp||{}).forEach(function(id){ var k=window.allKzp[id]; cnt.all++; if((k.stav||'cistopis')==='koncept') cnt.koncept++; else cnt.cistopis++; });
+  var groups = [ {k:'', lbl:'Vše', n:cnt.all}, {k:'cistopis', lbl:'✅ Čistopis', n:cnt.cistopis}, {k:'koncept', lbl:'📝 Koncept', n:cnt.koncept} ];
+  sw.innerHTML = '';
+  groups.forEach(function(g){
+    var on = (window._kzpStav===g.k);
+    var b = document.createElement('button');
+    b.textContent = g.lbl+' ('+g.n+')';
+    var baseCol = g.k==='koncept' ? '#f5a623' : (g.k==='cistopis' ? '#48bb78' : 'var(--accent)');
+    b.style.cssText = 'flex:1;padding:8px 8px;font-size:13px;font-weight:800;cursor:pointer;border-radius:8px;border:1px solid var(--border);'+
+      (on ? ('background:'+baseCol+';color:#0f3460;') : 'background:var(--panel);color:var(--text2);');
+    b.onclick = (function(k){ return function(){ setKzpStav(k); }; })(g.k);
+    sw.appendChild(b);
+  });
+}
+
+// ── 🧪 Zkumavka ← Dokumenty (TePř/KZP) – D11 (data v window.allDokumenty, kat 'KZP'/'TePř', vlastník uid) ──
+function _privStorage(){ return storage; }   // alias, ať fungují sdílené helpery (_uploadPdfFile)
+function _dokKatNorm(k){ k=String(k||'').toLowerCase(); if(k==='kzp') return 'kzp'; if(k==='tepř'||k==='tepr') return 'tepr'; return k; }
+function _canEditDok(d){ return isOwner(d,'uid') || (typeof isAdmin==='function' && isAdmin()); }
+function deleteKzpDoc(key){
+  var d=(window.allDokumenty||{})[key]; if(!d) return;
+  if(!_canEditDok(d)){ showToast('🔒 Smazat může jen ten, kdo dokument nahrál', 2800); return; }
+  if(!confirm('Smazat dokument „'+(d.nazev||'')+'"? Tím zmizí i ze Zkumavky.')) return;
+  db.ref('dokumenty/'+key).remove().then(function(){
+    try{ if(storage && d.soubor) storage.ref(d.soubor).delete().catch(function(){}); }catch(e){}
+    showToast('Dokument smazán', 1800);
+  }).catch(function(e){ showToast('❌ '+((e&&e.message)||'chyba'), 3000); });
+}
+function setKzpDocStav(key, stav){
+  var d=(window.allDokumenty||{})[key]; if(!d) return;
+  if(!_canEditDok(d)){ showToast('Změnit stav může autor nebo koordinátor', 2800); return; }
+  var lbl=(stav==='cistopis')?'ČISTOPIS (schváleno)':'KONCEPT (rozpracováno)';
+  if(!confirm('Označit „'+(d.nazev||'')+'" jako '+lbl+'?')) return;
+  db.ref('dokumenty/'+key+'/stav').set(stav)
+    .then(function(){ showToast('Stav změněn na '+(stav==='cistopis'?'✅ čistopis':'📝 koncept'), 2000); })
+    .catch(function(e){ showToast('❌ '+((e&&e.message)||'chyba'), 3000); });
+}
+function submitKzpUpload(){
+  if(!window.currentUser){ showToast('Přihlaš se', 2000); return; }
+  if(!storage){ showToast('❌ Storage nedostupné', 3000); return; }
+  var katSel=(document.getElementById('kzpup-kat')||{}).value||'auto';
+  var stav=(document.getElementById('kzpup-stav')||{}).value||'cistopis';
+  var so=((document.getElementById('kzpup-so')||{}).value||'').trim();
+  var fi=document.getElementById('kzpup-file'); var st=document.getElementById('kzpup-status');
+  var col=_collectPdfFiles(fi.files);
+  if(!col.ok.length){ if(st) st.textContent=col.err.length?('⚠️ '+col.err.map(function(e){return e.name+' ('+e.why+')';}).join(', ')):'⚠️ Vyber PDF soubor(y)'; return; }
+  var files=col.ok, total=files.length, done=0, fail=0;
+  if(st) st.textContent='⏳ Nahrávám 0/'+total+'…';
+  (function next(i){
+    if(i>=total){
+      if(st) st.textContent=(fail?('⚠️ Nahráno '+done+' z '+total+' ('+fail+' selhalo)'):('✅ Hotovo – nahráno '+done))+(col.err.length?(' · přeskočeno: '+col.err.map(function(e){return e.name;}).join(', ')):'');
+      showToast(fail?('Nahráno '+done+'/'+total):(done>1?('Nahráno '+done+' dokumentů'):'Dokument nahrán'), 2200);
+      fi.value=''; var dc=document.getElementById('kzpup-count'); if(dc) dc.textContent=''; return;
+    }
+    var f=files[i]; var k=(katSel==='auto')?(_detectDokKat(f.name)||'kzp'):katSel; var kat=(k==='tepr')?'TePř':'KZP';
+    var nazev=f.name.replace(/\.pdf$/i,'');
+    var path='pdf/uploads/dokumenty/'+(k==='tepr'?'TeP_':'KZP')+'/'+Date.now()+'_'+i+'_'+_safePdfName(f.name)+'.pdf';
+    _uploadPdfFile(f, path).then(function(){
+      return db.ref('dokumenty').push({ kat:kat, nazev:nazev, so:so, stav:stav, soubor:path, uid:window.currentUser.uid, author:window.currentUser.name||'', ts:Date.now() });
+    }).then(function(){ done++; if(st) st.textContent='⏳ Nahrávám '+done+'/'+total+'…'; next(i+1); })
+      .catch(function(e){ console.error('submitKzpUpload', e); fail++; next(i+1); });
+  })(0);
+}
+// 📋 Dokumenty: hromadné nahrání (protokoly/ostatní). 1 soubor → zeptá se na název, víc souborů → název z názvu souboru.
+function _dokUploadFiles(fileList){
+  if(!window.currentUser){ showToast('Nejsi přihlášen', 2500); return; }
+  if(!storage){ showToast('❌ Storage nedostupné', 3000); return; }
+  var ok=[], err=[];
+  Array.prototype.slice.call(fileList||[]).forEach(function(f){
+    if(!/\.pdf$/i.test(f.name)) err.push(f.name+' (není PDF)');
+    else if(f.size > 30*1024*1024) err.push(f.name+' (> 30 MB)');
+    else ok.push(f);
+  });
+  if(!ok.length){ showToast(err.length?('⚠️ '+err.join(', ')):'Vyber PDF', 3500); return; }
+  var kat=(document.getElementById('dok-up-kat').value||'Ostatní');
+  var so=(document.getElementById('dok-up-so').value||'').trim();
+  var nazev1=null;
+  if(ok.length===1){
+    nazev1=prompt('Název dokumentu (jak se zobrazí):', ok[0].name.replace(/\.pdf$/i,''));
+    if(nazev1===null) return;
+  }
+  var total=ok.length, done=0, fail=0;
+  showSync('⏳ Nahrávám 0/'+total+'…');
+  (function next(i){
+    if(i>=total){ hideSync(); showToast((fail?('⚠️ Nahráno '+done+'/'+total):(done>1?('✅ Nahráno '+done+' dokumentů'):'✅ Dokument nahrán'))+(err.length?(' · přeskočeno: '+err.join(', ')):''), 3000); return; }
+    var f=ok[i]; var nazev=((nazev1||'').trim()) || f.name.replace(/\.pdf$/i,'');
+    var path='pdf/uploads/dokumenty/'+kat.replace(/[^A-Za-z0-9]+/g,'_')+'/'+Date.now()+'_'+i+'_'+_safePdfName(nazev)+'.pdf';
+    _uploadPdfFile(f, path).then(function(){
+      return db.ref('dokumenty').push({ kat:kat, nazev:nazev, so:so, soubor:path, uid:window.currentUser.uid, author:window.currentUser.name||'', ts:Date.now() });
+    }).then(function(){ done++; showSync('⏳ Nahrávám '+done+'/'+total+'…'); next(i+1); })
+      .catch(function(e){ console.error('dok upload', e); fail++; next(i+1); });
+  })(0);
+}
+function _setupDokDrop(){
+  var z=document.getElementById('dok-drop'); if(!z || z.dataset.bound) return; z.dataset.bound='1';
+  z.addEventListener('click', function(){ document.getElementById('dok-file-input').click(); });
+  ['dragenter','dragover'].forEach(function(ev){ z.addEventListener(ev, function(e){ e.preventDefault(); e.stopPropagation(); z.style.borderColor='var(--accent2)'; }); });
+  ['dragleave','dragend'].forEach(function(ev){ z.addEventListener(ev, function(e){ e.preventDefault(); z.style.borderColor=''; }); });
+  z.addEventListener('drop', function(e){ e.preventDefault(); e.stopPropagation(); z.style.borderColor=''; var dt=e.dataTransfer; if(dt && dt.files && dt.files.length) _dokUploadFiles(dt.files); });
+}
+
 
 function openKzpItem(id){
   var k = window.allKzp[id];
@@ -15224,6 +15765,9 @@ function openKzpPdfInline(k){
   if(warning)   warning.style.display   = 'none';
   if(addBtn)    addBtn.style.display    = 'none';
   if(cleanupBtn)cleanupBtn.style.display= 'none';
+  var upBtnH=document.getElementById('kzp-upload-btn'); if(upBtnH) upBtnH.style.display='none';
+  var stSwH=document.getElementById('kzp-stav-switch'); if(stSwH) stSwH.style.display='none';
+  var upBoxH=document.getElementById('kzp-upload-box'); if(upBoxH) upBoxH.style.display='none';
   if(backBtn)   backBtn.style.display   = '';
   // TePř - ukaž ✍️ Podepsat a 📥 Stáhnout
   var isTepr = (k.typ === 'tepr');
@@ -15264,6 +15808,8 @@ function closeKzpPdfInline(){
   if(warning)   warning.style.display   = '';
   if(addBtn)    addBtn.style.display    = '';
   if(cleanupBtn)cleanupBtn.style.display= '';
+  var upBtnR=document.getElementById('kzp-upload-btn'); if(upBtnR) upBtnR.style.display='';
+  var stSwR=document.getElementById('kzp-stav-switch'); if(stSwR) stSwR.style.display='flex';
   if(signBtn)   signBtn.style.display   = 'none';
   if(dlBtn)     dlBtn.style.display     = 'none';
   if(backBtn)   backBtn.style.display   = 'none';
@@ -15736,8 +16282,8 @@ function copyDiaryExport(){
         <button type="button" onclick="openReportExport()" title="Export popisů / Word pro tento měsíc" style="background:var(--accent2);border:none;border-radius:6px;color:#0f3460;padding:7px 10px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">📄 Export</button>
       </div>
     </div>
-    <div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;">
-      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px;">📸 Měsíční záloha fotek (stažení bokem)</label>
+    <div id="backup-section" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px;display:none;">
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px;">📸 Měsíční záloha fotek (jen správce)</label>
       <div id="backup-info" style="font-size:11px;color:var(--text2);margin-bottom:6px;"></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <button type="button" onclick="selectPhotosSinceBackup()" title="Vybere fotky přidané od poslední zálohy a rovnou nabídne stažení ZIP" style="flex:1;background:#0ea5e9;border:none;border-radius:6px;color:#fff;padding:8px 10px;font-size:13px;font-weight:700;cursor:pointer;">⬇ Stáhnout nové (ZIP)</button>
@@ -16164,7 +16710,7 @@ function copyDiaryExport(){
     <button id="btn-prop-zoom-out" onclick="pdfZoom(-1)" title="Zmenšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">−</button>
     <button id="btn-prop-zoom-in"  onclick="pdfZoom(+1)" title="Zvětšit" style="display:none;background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer;padding:4px 6px;font-weight:700;">+</button>
     <button onclick="openFileExternal(currentPropSrc)" title="Otevřít v Safari s plnou lupou" style="background:none;border:none;color:var(--text2);font-size:16px;cursor:pointer;padding:4px 6px;">↗</button>
-    <button id="btn-prop-add-vykres" onclick="addVykresForCurrentSO()" title="Přidat PDF výkres k tomuto objektu" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px 6px;font-weight:700;">➕📄</button>
+    <button id="btn-prop-add-vykres" onclick="addVykresForCurrentSO()" title="Přidat výkres(y) k tomuto objektu – i více PDF naráz (RDS/PDPS)" style="background:none;border:none;color:var(--accent2);font-size:16px;cursor:pointer;padding:4px 6px;font-weight:700;">➕📄</button>
     <button id="btn-prop-del-vykres" onclick="deleteCurrentVykres()" title="Smazat nahraný výkres" style="display:none;background:none;border:none;color:#ff6b6b;font-size:15px;cursor:pointer;padding:4px 6px;">🗑</button>
     <button id="btn-prop-invalidate" onclick="invalidateCurrentDoc()" title="Označit výkres jako neplatný (nahrazený)" style="display:none;background:none;border:none;color:var(--text2);font-size:15px;cursor:pointer;padding:4px 6px;">🗄️</button>
     <button id="btn-prop-restore" onclick="restoreCurrentDoc()" title="Obnovit výkres jako platný" style="display:none;background:none;border:none;color:#48bb78;font-size:15px;cursor:pointer;padding:4px 6px;">♻️</button>
@@ -16172,6 +16718,7 @@ function copyDiaryExport(){
     <button id="btn-prop-close" onclick="closePropPanel()">✕</button>
   </div>
   <input type="file" id="vykres-file-input" accept="application/pdf,.pdf" style="display:none;">
+  <div id="prop-viewswitch" style="display:none;gap:6px;padding:6px 10px 0;background:var(--bg);flex-shrink:0;"></div>
   <div id="prop-tabs"></div>
   <div id="prop-content" style="flex:1;display:flex;flex-direction:column;min-height:0;">
     <iframe id="prop-iframe" src="" style="flex:1;width:100%;border:none;display:none;touch-action:pan-x pan-y pinch-zoom;"></iframe>
@@ -16388,25 +16935,24 @@ function copyDiaryExport(){
 <div class="task-modal" id="dokumenty-modal" style="z-index:4600;">
   <div class="tm-box">
     <div style="display:flex;align-items:center;justify-content:space-between;padding-right:4px;">
-      <h3 style="flex:1;">📋 Dokumenty</h3>
+      <h3 style="flex:1;">📋 Dokumenty <span style="font-size:11px;color:var(--text2);font-weight:400;">(protokoly, ostatní)</span></h3>
       <button class="btn-secondary" style="padding:4px 10px;" onclick="closeDokumenty()">✕</button>
     </div>
     <div id="dok-filter" style="display:flex;gap:5px;flex-wrap:wrap;margin:6px 0;"></div>
+    <div style="font-size:11px;color:var(--text2);margin:2px 0 6px;">ℹ️ TePř a KZP (prohlížení, podpis, koncept/čistopis) jsou v 🧪 Kvalita/KZP.</div>
     <div id="dok-list" style="max-height:48vh;overflow-y:auto;"></div>
     <div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;">
       <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">➕ Nahrát dokument (PDF)</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">
         <select class="task-field" id="dok-up-kat" style="flex:1;min-width:110px;">
-          <option value="KZP">KZP</option>
-          <option value="TePř">TePř</option>
           <option value="Protokol">Protokol</option>
           <option value="Ostatní">Ostatní</option>
         </select>
         <input class="task-field" id="dok-up-so" list="dok-so-list" placeholder="SO (volitelně)" style="flex:1;min-width:110px;">
         <datalist id="dok-so-list"></datalist>
       </div>
-      <button class="btn-primary" style="margin-top:6px;width:100%;" onclick="document.getElementById('dok-file-input').click()">📄 Vybrat PDF a nahrát</button>
-      <input type="file" id="dok-file-input" accept="application/pdf" style="display:none" onchange="uploadDokument(this)">
+      <div id="dok-drop" style="margin-top:6px;border:2px dashed var(--border);border-radius:10px;padding:12px;text-align:center;cursor:pointer;background:var(--panel2);font-size:13px;color:var(--text2);">📥 Přetáhni sem PDF nebo <b style="color:var(--accent);">klikni pro výběr</b> (i více naráz)</div>
+      <input type="file" id="dok-file-input" accept="application/pdf" multiple style="display:none" onchange="uploadDokument(this)">
     </div>
     <div class="tm-buttons"><button class="btn-secondary" onclick="closeDokumenty()">Zavřít</button></div>
   </div>
@@ -17146,12 +17692,42 @@ function copyDiaryExport(){
     <button id="kzp-download-btn" onclick="downloadTeprWithSigs()" title="Stáhnout finální PDF s podpisy" style="display:none;background:var(--green);color:#fff;">📥 Stáhnout</button>
     <button id="kzp-evidence-btn" onclick="openSignEvidence()" title="Evidence podpisů (přehled tabulka)" style="background:var(--panel2);color:var(--text2);font-size:13px;">📋 Evidence</button>
     <button id="kzp-cleanup-btn" onclick="cleanupOldKzp()" title="Vyčistit staré KZP záznamy" style="background:var(--panel2);color:var(--text2);font-size:13px;">🧹</button>
-    <button id="kzp-add-btn" onclick="openKzpAddModal()" style="background:var(--accent);color:#fff;">+ Položka</button>
+    <button id="kzp-upload-btn" onclick="toggleKzpUpload()" title="Nahrát TePř / KZP (PDF, i více naráz)" style="background:var(--accent);color:#fff;font-weight:700;">📥 Nahrát</button>
     <button onclick="closeKzpPanel()">✕</button>
   </div>
-  <div id="kzp-warning-banner" style="background:rgba(255,107,107,0.18);border-left:4px solid #ff6b6b;color:#ff8585;padding:10px 14px;font-size:13px;line-height:1.4;flex-shrink:0;">
-    ⚠️ <b>POZOR — KZP nejsou schválena</b>. Hodnoty jsou z neschválené verze v01. Pro skutečné kontroly použij vždy aktuální schválený výtisk od TDS / objednatele.
+  <!-- Starý hardcoded warning skryt – stav řeší přepínač Koncept/Čistopis; element ponechán kvůli JS referencím -->
+  <div id="kzp-warning-banner" style="display:none;"></div>
+  <!-- Nahrání TePř/KZP (hromadně + drag&drop) – sloučeno sem z Dokumentů -->
+  <div id="kzp-upload-box" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--panel);">
+    <div style="font-weight:800;font-size:14px;color:var(--accent);margin-bottom:8px;">📥 Nahrát TePř / KZP (PDF, i více naráz)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <label style="flex:1;min-width:110px;font-size:11px;color:var(--text2);">Druh
+        <select id="kzpup-kat" class="task-field" style="margin-top:3px;">
+          <option value="auto">🔎 Rozpoznat z názvu</option>
+          <option value="kzp">🧪 KZP</option>
+          <option value="tepr">📋 TePř</option>
+        </select>
+      </label>
+      <label style="flex:1;min-width:110px;font-size:11px;color:var(--text2);">Stav
+        <select id="kzpup-stav" class="task-field" style="margin-top:3px;">
+          <option value="cistopis">✅ Čistopis</option>
+          <option value="koncept">📝 Koncept</option>
+        </select>
+      </label>
+      <label style="flex:1;min-width:110px;font-size:11px;color:var(--text2);">SO (nepovinné)
+        <input id="kzpup-so" class="task-field" type="text" placeholder="např. SO 101" style="margin-top:3px;">
+      </label>
+    </div>
+    <div id="kzpup-drop" style="border:2px dashed var(--border);border-radius:10px;padding:14px;text-align:center;cursor:pointer;background:var(--panel2);">
+      <div style="font-size:13px;color:var(--text2);">📥 Přetáhni sem PDF nebo <b style="color:var(--accent);">klikni pro výběr</b><br><span style="font-size:11px;opacity:.75;">(i více TePř/KZP najednou – druh rozpozná z názvu, nebo vyber ručně)</span></div>
+      <div id="kzpup-count" style="font-size:11px;color:var(--accent);margin-top:6px;word-break:break-word;"></div>
+      <input id="kzpup-file" type="file" accept="application/pdf,.pdf" multiple style="display:none;">
+    </div>
+    <div id="kzpup-status" style="font-size:12px;color:var(--text2);min-height:16px;margin-top:6px;"></div>
+    <button onclick="submitKzpUpload()" style="margin-top:6px;width:100%;background:var(--accent);border:none;border-radius:8px;color:#fff;padding:11px;font-size:14px;font-weight:700;cursor:pointer;">📤 Nahrát</button>
   </div>
+  <!-- Přepínač Koncept / Čistopis -->
+  <div id="kzp-stav-switch" style="display:flex;gap:6px;padding:8px 14px 2px;flex-shrink:0;"></div>
   <div id="kzp-filter-bar">
     <select id="kzp-filter-typ" onchange="renderKzpList()">
       <option value="">Vše (KZP + TePř)</option>
