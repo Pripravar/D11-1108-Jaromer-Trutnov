@@ -2,7 +2,7 @@
 // Strategie: network-first pro index.html (vždy čerstvá appka po pull-to-refresh),
 // cache-first jako fallback při výpadku sítě. PDF a dlaždice se NEcacheují.
 // Verzi zvyš při každém deployi, ať se stará cache invaliduje.
-var CACHE = 'd11-app-v27-2026-11-04-d10Rollout';
+var CACHE = 'd11-app-v28-2026-11-12-androidZachranaFotky';
 var SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', function(e){
@@ -60,7 +60,7 @@ self.addEventListener('push', function(event) {
   var title = n.title || 'D11 – most Jaroměř–Trutnov';
   var options = {
     body:    n.body || '',
-    icon:    n.icon || './manifest.json',
+    icon:    n.icon || './icon-192.png',
     badge:   n.badge,
     data:    data.data || {},
     tag:     (data.data && data.data.taskId) || 'stavba-notify',

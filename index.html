@@ -4424,8 +4424,12 @@ function compressFileToDataUrl(file, callback){
   }
   if(window.createImageBitmap){
     try {
-      createImageBitmap(file).then(function(bmp){ draw(bmp, bmp.width, bmp.height); try{ bmp.close(); }catch(e){} })
-                             .catch(function(){ viaObjectUrl(); });
+      // Dekóduj rovnou ZMENŠENĚ (resizeWidth) – plná bitmapa 50–108 Mpx foťáku má stovky MB a na Androidu
+      // (hlavně v kartě Chromu) stránku shodí. Na výšku vyjde 1600×2133 a draw() ji stáhne na max 1600.
+      var full=function(){ return createImageBitmap(file).then(function(bmp){ draw(bmp, bmp.width, bmp.height); try{ bmp.close(); }catch(e){} }); };
+      createImageBitmap(file, { resizeWidth: MAX, resizeQuality: 'high', imageOrientation: 'from-image' })
+        .then(function(bmp){ draw(bmp, bmp.width, bmp.height); try{ bmp.close(); }catch(e){} })
+        .catch(function(){ full().catch(function(){ viaObjectUrl(); }); });
     } catch(e){ viaObjectUrl(); }
   } else { viaObjectUrl(); }
 }
@@ -7931,9 +7935,29 @@ function _restorePhotoQueue(){
   _photoDbAll().then(function(jobs){
     if(!jobs || !jobs.length) return;
     var added=0;
+    var drafts=jobs.filter(function(j){ return j && j.compressed && j.meta && j.meta.draft; });
+    jobs=jobs.filter(function(j){ return !(j && j.meta && j.meta.draft); });
+    if(drafts.length) setTimeout(function(){ _restorePhotoDrafts(drafts); }, 1200);
     jobs.forEach(function(j){ if(j && j.compressed && j.ts!=null && !_photoQueue.some(function(q){return q.ts===j.ts;})){ j.tries=0; _photoQueue.push(j); _photoPending++; added++; } });
     if(added){ _updateUploadBadge(); _drainPhotoQueue(); showToast('📤 Dohrávám '+added+' '+_czPlural(added,'fotku','fotky','fotek')+' z minula…', 3500); }
   });
+}
+// Koncepty fotek, u kterých appka spadla při výběru SO → postupně nabídni výběr SO znovu.
+function _restorePhotoDrafts(drafts){
+  if(!drafts || !drafts.length) return;
+  if(window.photoSession && window.photoSession.draftTs) return;   // právě se fotí – neruš
+  var j=drafts.shift(), m=j.meta||{};
+  showToast('📷 Appka se minule při focení zavřela – fotka je zachráněná, vyber SO', 4500);
+  chooseSOForPhoto(m.km, function(soArr, share){
+    soArr=soArr||[];
+    var meta={ km:m.km, author:m.author, lat:m.lat, lng:m.lng, soList:soArr, so:(soArr[0]||''), sdilenoSub:!!(share&&share.sub), sdilenoInvestor:!!(share&&share.investor) };
+    _photoDbDelete(j.ts);
+    _enqueuePhotoUpload({ compressed:j.compressed, meta:meta, stamp:(j.stamp!==false), ts:_uniquePhotoTs() });
+    setTimeout(function(){ _restorePhotoDrafts(drafts); }, 400);
+  }, [], function(){
+    _photoDbDelete(j.ts); showToast('🗑️ Fotka zahozena', 1500);
+    setTimeout(function(){ _restorePhotoDrafts(drafts); }, 400);
+  }, { sub:false, investor:false });
 }
 function _enqueuePhotoUpload(job){
   if(job.tries == null) job.tries = 0;
@@ -8150,6 +8174,10 @@ window.addEventListener('load', function() {
         window.photoSession.pendingPhoto = compressed;
         window.photoSession.pendingMeta  = {km: km, author: author, lat: latlng.lat, lng: latlng.lng};
         window.photoSession.phase = 'stamp';
+        // ZÁCHRANA: fotku hned ulož do zařízení (koncept bez SO). Když Android kartu/appku při výběru SO
+        // shodí, po znovuotevření se nabídne výběr SO znovu (_restorePhotoDrafts) – fotka se neztratí.
+        var _draftTs = _uniquePhotoTs(); window.photoSession.draftTs = _draftTs;
+        _photoDbPut({ ts:_draftTs, compressed:compressed, meta:{km:km, author:author, lat:latlng.lat, lng:latlng.lng, draft:true}, stamp:true, tries:0 });
         // Výběr stavebního objektu (složky) podle staničení, pak teprve razítko + upload.
         chooseSOForPhoto(km, function(soArr, share){
           soArr = soArr || [];
@@ -8158,12 +8186,14 @@ window.addEventListener('load', function() {
           window.photoSession.pendingMeta.so = soArr[0] || '';   // primární (zpětná kompatibilita)
           window.photoSession.pendingMeta.sdilenoSub = !!(share && share.sub);
           window.photoSession.pendingMeta.sdilenoInvestor = !!(share && share.investor);
+          if(window.photoSession.draftTs){ _photoDbDelete(window.photoSession.draftTs); window.photoSession.draftTs = null; }   // koncept → řádná fronta
           ppAnswer(true);  // true = v galerii bude razítkovaná verze
         }, (window._lastSeriesSO || []), function(){
           // Zahodit fotku – neukládá se nic
           window.photoSession.pendingPhoto = null;
           window.photoSession.pendingMeta = null;
           window.photoSession.phase = null;
+          if(window.photoSession.draftTs){ _photoDbDelete(window.photoSession.draftTs); window.photoSession.draftTs = null; }
           showToast('🗑️ Fotka zahozena', 1500);
         }, { sub:false, investor:false });
       }
@@ -8902,6 +8932,7 @@ function _enterApp(displayName){
   loadStroje();
   setupFcmIfPossible();
   maybeShowIosHint();
+  maybeShowAndroidHint();
   setTimeout(applyPermsToUI, 400);   // skrýt zakázané funkce (allUsers se dočte z .on())
   _initLayerSubs();                  // otevři podkategorie dle hlavních přepínačů
   // Výchozí zobrazení vrstev (per zařízení) – 2× kvůli vrstvám dotahovaným z Firebase async
@@ -12420,6 +12451,33 @@ function maybeShowIosHint() {
   setTimeout(function(){
     document.getElementById('ios-install-hint').classList.add('show');
   }, 1500);
+}
+// ── Android: appka otevřená v kartě Chromu (zástupce na ploše, ne nainstalovaná) → nabídni instalaci ──
+// V kartě Chromu Android při focení často uvolní stránku z paměti → „spadne". Nainstalovaná appka je stabilnější.
+window._deferredInstall = null;
+window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); window._deferredInstall = e; var b=document.getElementById('android-install-go'); if(b) b.textContent='📲 Nainstalovat aplikaci'; });
+window.addEventListener('appinstalled', function(){ var h=document.getElementById('android-install-hint'); if(h) h.remove(); window._deferredInstall=null; });
+function maybeShowAndroidHint(){
+  if(!/Android/i.test(navigator.userAgent) || isStandalone()) return;
+  try{ var d=parseInt(localStorage.getItem('androidHintTs')||'0',10); if(d && Date.now()-d < 3*24*3600*1000) return; }catch(e){}
+  setTimeout(function(){
+    if(document.getElementById('android-install-hint')) return;
+    var h=document.createElement('div'); h.id='android-install-hint';
+    h.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:100000;background:#16213e;border:2px solid #f5a623;border-radius:12px;padding:12px 14px;color:#fff;font-size:13px;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.5);';
+    h.innerHTML='<div style="font-weight:800;color:#f5a623;margin-bottom:4px;">📲 Appku máš otevřenou v Chromu</div>'+
+      '<div>Na Androidu tak může při focení spadnout. Nainstaluj si ji jako aplikaci – je stabilnější a má vlastní ikonu.</div>'+
+      '<div id="android-install-manual" style="display:none;margin-top:6px;color:#cbd5e1;">V Chromu ťukni na <b>⋮</b> (vpravo nahoře) → <b>Instalovat aplikaci</b> (nebo <b>Přidat na plochu → Instalovat</b>). Starého zástupce z plochy pak smaž.</div>'+
+      '<div style="display:flex;gap:8px;margin-top:10px;">'+
+      '<button id="android-install-go" style="flex:1;background:#f5a623;color:#0f3460;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:800;cursor:pointer;">📲 Jak nainstalovat</button>'+
+      '<button id="android-install-x" style="background:transparent;color:#cbd5e1;border:1px solid #475569;border-radius:8px;padding:11px 14px;font-size:13px;cursor:pointer;">Teď ne</button></div>';
+    document.body.appendChild(h);
+    if(window._deferredInstall){ document.getElementById('android-install-go').textContent='📲 Nainstalovat aplikaci'; }
+    document.getElementById('android-install-go').onclick=function(){
+      if(window._deferredInstall){ var ev=window._deferredInstall; window._deferredInstall=null; ev.prompt(); try{ ev.userChoice.then(function(r){ if(r && r.outcome==='accepted') h.remove(); }); }catch(e){} }
+      else { document.getElementById('android-install-manual').style.display='block'; }
+    };
+    document.getElementById('android-install-x').onclick=function(){ try{ localStorage.setItem('androidHintTs', String(Date.now())); }catch(e){} h.remove(); };
+  }, 2500);
 }
 function dismissIosHint() {
   localStorage.setItem('iosHintDismissed', '1');
