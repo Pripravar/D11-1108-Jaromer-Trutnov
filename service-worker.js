@@ -2,7 +2,7 @@
 // Strategie: network-first pro index.html (vždy čerstvá appka po pull-to-refresh),
 // cache-first jako fallback při výpadku sítě. PDF a dlaždice se NEcacheují.
 // Verzi zvyš při každém deployi, ať se stará cache invaliduje.
-var CACHE = 'd11-app-v28-2026-11-12-androidZachranaFotky';
+var CACHE = 'd11-app-v29-2026-11-19-schvaleniGpsPrepinac';
 var SHELL = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', function(e){
@@ -63,7 +63,7 @@ self.addEventListener('push', function(event) {
     icon:    n.icon || './icon-192.png',
     badge:   n.badge,
     data:    data.data || {},
-    tag:     (data.data && data.data.taskId) || 'stavba-notify',
+    tag:     (data.data && (data.data.taskId || (data.data.typ === 'schvaleni' ? ('schvaleni-' + (data.data.uid || '')) : ''))) || 'stavba-notify',
     renotify: true
   };
   event.waitUntil(self.registration.showNotification(title, options).then(function(){
@@ -78,6 +78,7 @@ self.addEventListener('notificationclick', function(event) {
   else if(d.kanalId) hash = '#chat=' + encodeURIComponent(d.kanalId);
   else if(d.typ === 'chat') hash = '#chat';
   else if(d.fotoKey) hash = '#foto=' + encodeURIComponent(d.fotoKey);
+  else if(d.typ === 'schvaleni') hash = '#schvaleni';   // nový uživatel čeká → Správa uživatelů
   var url = './' + hash;
   event.waitUntil(
     self.clients.matchAll({type:'window', includeUncontrolled:true}).then(function(list){
